@@ -16,16 +16,19 @@ const (
 // User the user registered
 type User struct {
 	ID               uint64           `json:"id"`
-	UID              string           `json:"uid"`
+	UID              UID              `json:"uid"`
 	Email            string           `json:"email"`
 	Portrait         string           `json:"portrait"`
 	UserRegisterType UserRegisterType `json:"user_register_type"`
 }
 
+// userDBHD the handler to operate the user table
 type userDBHD struct{}
 
+// UserDBHD the default userDBHD
 var UserDBHD = &userDBHD{}
 
+// Add insert a user record
 func (hd *userDBHD) Add(db *gorm.DB, user *User) response.SError {
 	err := db.Create(user).Error
 	if err != nil {
@@ -34,7 +37,8 @@ func (hd *userDBHD) Add(db *gorm.DB, user *User) response.SError {
 	return nil
 }
 
-func (hd *userDBHD) GetByUID(db *gorm.DB, uid string) (*User, response.SError) {
+// GetByUID get a User by uid
+func (hd *userDBHD) GetByUID(db *gorm.DB, uid UID) (*User, response.SError) {
 	var u *User
 	err := db.Where("uid=?", uid).First(&u).Error
 	if err != nil {
@@ -46,9 +50,10 @@ func (hd *userDBHD) GetByUID(db *gorm.DB, uid string) (*User, response.SError) {
 	return u, nil
 }
 
-func (hd *userDBHD) ListByUIDs(db *gorm.DB, uids []string) ([]*User, response.SError) {
+// ListByUIDs list Users by a list of uid
+func (hd *userDBHD) ListByUIDs(db *gorm.DB, uids []UID) ([]*User, response.SError) {
 	var us []*User
-	err := db.Where("uid in (?)").Find(&us).Error
+	err := db.Where("uid in (?)", uids).Find(&us).Error
 	if err != nil {
 		return nil, response.ErrroCode_InternalUnknownError.Wrap(err, "list user fail")
 	}
