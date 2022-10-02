@@ -41,7 +41,16 @@ func (hd *userDBHD) GetByUID(db *gorm.DB, uid string) (*User, response.SError) {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
-		return nil, response.ErrroCode_InternalUnknownError.Wrap(err, "get user by uid %s fail", uid)
+		return nil, response.ErrroCode_InternalUnknownError.Wrap(err, "get user by fail")
 	}
 	return u, nil
+}
+
+func (hd *userDBHD) ListByUIDs(db *gorm.DB, uids []string) ([]*User, response.SError) {
+	var us []*User
+	err := db.Where("uid in (?)").Find(&us).Error
+	if err != nil {
+		return nil, response.ErrroCode_InternalUnknownError.Wrap(err, "list user fail")
+	}
+	return us, nil
 }
