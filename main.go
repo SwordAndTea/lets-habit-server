@@ -12,8 +12,13 @@ func Init() {
 	if err := config.InitConfig("conf/config.yaml"); err != nil {
 		panic(err)
 	}
+	mysqlConf := config.GlobalConfig.Mysql
+	if err := service.InitDB(mysqlConf.DSN); err != nil {
+		panic(err)
+	}
 
-	if err := service.InitDB(); err != nil {
+	mailServiceConf := config.GlobalConfig.EmailService
+	if err := service.InitMailService("", mailServiceConf.Sender, mailServiceConf.AuthCode, mailServiceConf.Host, mailServiceConf.Port); err != nil {
 		panic(err)
 	}
 }

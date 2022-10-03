@@ -4,6 +4,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/swordandtea/fhwh/biz/response"
 	"github.com/swordandtea/fhwh/biz/service"
+	"github.com/swordandtea/fhwh/nullable"
 	"gorm.io/gorm"
 )
 
@@ -16,19 +17,21 @@ const (
 
 // User the user registered
 type User struct {
-	ID               uint64           `json:"id"`
-	UID              UID              `json:"uid"`
-	Name             string           `json:"name"`
-	Email            string           `json:"email"`
-	Password         Password         `json:"-"`
-	Portrait         string           `json:"-"` //portrait Tos Key
-	PortraitURL      string           `json:"portrait" gorm:"-"`
-	UserRegisterType UserRegisterType `json:"user_register_type"`
+	ID               uint64              `json:"id"`
+	UID              UID                 `json:"uid"`
+	Name             nullable.NullString `json:"name" gorm:"omit"`
+	Email            nullable.NullString `json:"email"`
+	Password         *Password           `json:"-"`
+	Portrait         nullable.NullString `json:"-"` //portrait object storage Key
+	PortraitURL      string              `json:"portrait" gorm:"-"`
+	UserRegisterType UserRegisterType    `json:"user_register_type"`
 }
 
 func postProcessUserField(users []*User) {
 	for _, u := range users {
-		u.PortraitURL = service.GetObjectStorageExecutor().ObjectKeyToURL(u.Portrait)
+		if u.Portrait.NotNull() {
+			u.PortraitURL = service.GetObjectStorageExecutor().ObjectKeyToURL(u.Portrait.Get())
+		}
 	}
 }
 
@@ -52,6 +55,19 @@ func (hd *userDBHD) Add(db *gorm.DB, user *User) response.SError {
 func (hd *userDBHD) GetByUID(db *gorm.DB, uid UID) (*User, response.SError) {
 	var user *User
 	err := db.Where("uid=?", uid).First(&user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, response.ErrroCode_InternalUnknownError.Wrap(err, "get user by fail")
+	}
+	postProcessUserField([]*User{user})
+	return user, nil
+}
+
+func (hd *userDBHD) GetByEmail(db *gorm.DB, email string) (*User, response.SError) {
+	var user *User
+	err := db.Where("email=?", email).First(&user).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil

@@ -1,0 +1,40 @@
+local:
+  log:
+    level: DEBUG
+  mysql:
+    dsn: 'root:123456@tcp(localhost:3306)/fhwf?charset=utf8mb4&parseTime=true'
+  email_service:
+    sender: 'xxx@xxx.com'
+    host: 'smtp.xxx.com'
+    port: 587
+    auth_code: 'xxxx'
+    activate_uri: 'http://localhost:8888/api/v1/user/register/email/activate'
+    activate_param: 'code'
+  jwt:
+    cypher: 'xxxx'
+
+test:
+  log:
+    level: DEBUG
+  mysql:
+    dsn: ''
+  email_service:
+    sender: ''
+    host: ''
+    port: ''
+    auth_code: ''
+    activate_uri: ''
+    activate_param: ''
+
+prod:
+  log:
+    level: INFO
+  mysql:
+    dsn: ''
+  email_service:
+    sender: ''
+    host: ''
+    port: ''
+    auth_code: ''
+    activate_uri: ''
+    activate_param: ''

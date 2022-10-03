@@ -12,4 +12,12 @@ func customizedRegister(r *server.Hertz) {
 	r.GET("/ping", handler.Ping)
 
 	// your code ...
+	apiV1 := r.Group("api/v1")
+
+	// register user related api
+	userRouter := handler.NewUserRouter()
+	{
+		apiV1.POST("/user/register/email", userRouter.RegisterByEmail)
+		apiV1.GET("/user/register/email/activate", userRouter.ActivateEmail)
+	}
 }

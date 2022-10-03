@@ -36,4 +36,5 @@ _testmain.go
 dumped_hertz_remote_config.json
 venv
 tool
+conf/config.yaml
 		  

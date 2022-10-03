@@ -14,9 +14,24 @@ type MysqlConfig struct {
 	DSN string `yaml:"dsn" json:"dsn"`
 }
 
+type EmailServiceConfig struct {
+	Sender        string `yaml:"sender" json:"sender"`
+	Host          string `yaml:"host" json:"host"`
+	Port          uint32 `yaml:"port" json:"port"`
+	AuthCode      string `yaml:"auth_code" json:"auth_code"`
+	ActivateURI   string `yaml:"activate_uri" json:"activate_uri"`
+	ActivateParam string `yaml:"activate_param" json:"activate_param"`
+}
+
+type JWTConfig struct {
+	Cypher string `yaml:"cypher" json:"cypher"`
+}
+
 type RuntimeConfig struct {
-	Log   LogConfig   `yaml:"log" json:"log"`
-	Mysql MysqlConfig `yaml:"mysql" json:"mysql"`
+	Log          LogConfig          `yaml:"log" json:"log"`
+	Mysql        MysqlConfig        `yaml:"mysql" json:"mysql"`
+	EmailService EmailServiceConfig `yaml:"email_service" json:"email_service"`
+	JWT          JWTConfig          `yaml:"jwt" json:"jwt"`
 }
 
 var GlobalConfig *RuntimeConfig
@@ -40,9 +55,21 @@ func InitConfig(filePath string) error {
 	}
 	GlobalConfig = c
 
-	// read some env to overwrite config
+	// read some env to overwrite config, usually is some sensitive config
 	if mysqlDSN := os.Getenv("MYSQL_DSN"); mysqlDSN != "" {
 		GlobalConfig.Mysql.DSN = mysqlDSN
+	}
+
+	if emailServiceSender := os.Getenv("EMAIL_SERVICE_SENDER"); emailServiceSender != "" {
+		GlobalConfig.EmailService.Sender = emailServiceSender
+	}
+
+	if emailServiceAuthCode := os.Getenv("EMAIL_SERVICE_AUTH_CODE"); emailServiceAuthCode != "" {
+		GlobalConfig.EmailService.AuthCode = emailServiceAuthCode
+	}
+
+	if jwtCypher := os.Getenv("JWT_CYPHER"); jwtCypher != "" {
+		GlobalConfig.JWT.Cypher = jwtCypher
 	}
 
 	return nil
