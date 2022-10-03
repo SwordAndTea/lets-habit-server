@@ -5,6 +5,7 @@ go 1.19
 require (
 	github.com/cloudwego/hertz v0.3.2
 	github.com/pkg/errors v0.9.1
+	golang.org/x/crypto v0.0.0-20220926161630-eccd6366d1be
 	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c
 	gorm.io/driver/mysql v1.3.6
 	gorm.io/gorm v1.23.10
