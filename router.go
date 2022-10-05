@@ -19,5 +19,8 @@ func customizedRegister(r *server.Hertz) {
 	{
 		apiV1.POST("/user/register/email", userRouter.RegisterByEmail)
 		apiV1.GET("/user/register/email/activate", userRouter.ActivateEmail)
+
+		apiV1.POST("/user/email/bind", handler.UserTokenVerify(), userRouter.SubmitBindEmail)
+		apiV1.GET("/user/email/bind/confirm", userRouter.ConfirmBindEmail)
 	}
 }

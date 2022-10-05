@@ -21,6 +21,8 @@ type EmailServiceConfig struct {
 	AuthCode      string `yaml:"auth_code" json:"auth_code"`
 	ActivateURI   string `yaml:"activate_uri" json:"activate_uri"`
 	ActivateParam string `yaml:"activate_param" json:"activate_param"`
+	BindURI       string `yaml:"bind_uri" json:"bind_uri"`
+	BindParam     string `yaml:"bind_param" json:"bind_param"`
 }
 
 type JWTConfig struct {

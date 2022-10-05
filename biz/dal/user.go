@@ -88,3 +88,11 @@ func (hd *userDBHD) ListByUIDs(db *gorm.DB, uids []UID) ([]*User, response.SErro
 	postProcessUserField(users)
 	return users, nil
 }
+
+func (hd *userDBHD) UpdateEmail(db *gorm.DB, uid UID, email string) response.SError {
+	err := db.Model(&User{}).Where("uid=?", uid).Update("email", email).Error
+	if err != nil {
+		return response.ErrroCode_InternalUnknownError.Wrap(err, "update user email fail")
+	}
+	return nil
+}

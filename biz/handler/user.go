@@ -35,6 +35,10 @@ func (r *UserRegisterRequest) validate() response.SError {
 	return nil
 }
 
+type UserRegisterResponse struct {
+	UID dal.UID `json:"uid"`
+}
+
 func (r *UserRouter) RegisterByEmail(ctx context.Context, rc *app.RequestContext) {
 	resp := response.NewHTTPResponse(rc)
 	defer resp.ReturnWithLog(ctx, rc)
@@ -52,11 +56,12 @@ func (r *UserRouter) RegisterByEmail(ctx context.Context, rc *app.RequestContext
 		return
 	}
 
-	sErr = r.Ctrl.EmailRegister(req.Email, dal.NewRawPassword(req.Password))
+	uid, sErr := r.Ctrl.EmailRegister(req.Email, dal.NewRawPassword(req.Password))
 	if sErr != nil {
 		resp.SetError(sErr)
 		return
 	}
+	resp.SetSuccessData(&UserRegisterResponse{UID: uid})
 }
 
 /*********************** User Router User Register Activate Email Handler ***********************/
@@ -101,4 +106,76 @@ func (r *UserRouter) ActivateEmail(ctx context.Context, rc *app.RequestContext) 
 
 	rc.Response.Header.Set("X-User-Token", userToken)
 	resp.SetSuccessData(&EmailActivateResponse{User: user})
+}
+
+/*********************** User Router User Submit Bind Email Handler ***********************/
+
+type SubmitBindEmailRequest struct {
+	Email string `json:"email"`
+}
+
+func (r *SubmitBindEmailRequest) validate() response.SError {
+	return ValidateEmail(r.Email)
+}
+
+func (r *UserRouter) SubmitBindEmail(ctx context.Context, rc *app.RequestContext) {
+	resp := response.NewHTTPResponse(rc)
+	defer resp.ReturnWithLog(ctx, rc)
+
+	req := &SubmitBindEmailRequest{}
+	err := rc.BindAndValidate(req)
+	if err != nil {
+		resp.SetError(BindAndValidateErr(err))
+		return
+	}
+
+	sErr := req.validate()
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+
+	uid := rc.GetString(UIDKey)
+	sErr = r.Ctrl.StartEmailBinding(dal.UID(uid), req.Email)
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+}
+
+/*********************** User Router User Confirm Bind Email Handler ***********************/
+
+type ConfirmBindEmailRequest struct {
+	Code string `query:"code"`
+}
+
+func (r *ConfirmBindEmailRequest) validate() response.SError {
+	if r.Code == "" {
+		return response.ErrorCode_InvalidParam.New("missing bind code")
+	}
+	return nil
+}
+
+func (r *UserRouter) ConfirmBindEmail(ctx context.Context, rc *app.RequestContext) {
+	resp := response.NewHTTPResponse(rc)
+	defer resp.ReturnWithLog(ctx, rc)
+
+	req := &ConfirmBindEmailRequest{}
+	err := rc.BindAndValidate(req)
+	if err != nil {
+		resp.SetError(BindAndValidateErr(err))
+		return
+	}
+
+	sErr := req.validate()
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+
+	sErr = r.Ctrl.ConfirmBindEmail(req.Code)
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
 }

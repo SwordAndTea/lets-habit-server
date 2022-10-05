@@ -10,6 +10,8 @@ local:
     auth_code: 'xxxx'
     activate_uri: 'http://localhost:8888/api/v1/user/register/email/activate'
     activate_param: 'code'
+    bind_uri: ''
+    bind_param: ''
   jwt:
     cypher: 'xxxx'
 
@@ -25,6 +27,8 @@ test:
     auth_code: ''
     activate_uri: ''
     activate_param: ''
+    bind_uri: ''
+    bind_param: ''
 
 prod:
   log:
@@ -38,3 +42,5 @@ prod:
     auth_code: ''
     activate_uri: ''
     activate_param: ''
+    bind_uri: ''
+    bind_param: ''

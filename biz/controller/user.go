@@ -18,8 +18,10 @@ import (
 
 type UserCtrl struct{}
 
-var once = &sync.Once{}
+var onceEmailActivate = &sync.Once{}
+var onceEmailBind = &sync.Once{}
 var emailActivateTmpl *template.Template
+var emailBindTmpl *template.Template
 
 const emailActivateTmplStr = `From: {{.From}}
 To: {{.To}}
@@ -29,8 +31,22 @@ Content-Type: text/plain; charset=utf-8
 欢迎加入lets-habits，点击下方链接以激活账户:
 {{.ActiveLink}}
 
-welcome To join lets-habits, click the link below To activate your account:
+welcome To join lets-habits, click the link below to activate your account:
 {{.ActiveLink}}
+`
+
+const emailBindTmplStr = `From: {{.From}}
+To: {{.To}}
+Subject: [lets-habits] 邮箱绑定 (mail activate)
+Content-Type: text/plain; charset=utf-8
+
+你正在为你的账户绑定邮箱，如果这是你的操作点击下方链接以完成绑定:
+{{.BindLink}}
+如果你没有操作绑定此邮箱，请忽略此邮件
+
+you are current binding email for account, if it's your operation, click the link below to bind:
+{{.BindLink}}
+otherwise, please ignore this message
 `
 
 const emailActivateAllowedInterval = time.Minute
@@ -43,19 +59,32 @@ type emailActivateTmplFiller struct {
 	ActiveLink string
 }
 
-func GetEmailTemplate() *template.Template {
-	once.Do(func() {
+type emailBindTmplFiller struct {
+	From     string
+	To       string
+	BindLink string
+}
+
+func GetEmailActivateTemplate() *template.Template {
+	onceEmailActivate.Do(func() {
 		emailActivateTmpl, _ = template.New("mail-activate-tmpl").Parse(emailActivateTmplStr)
 	})
 	return emailActivateTmpl
 }
 
-func (c *UserCtrl) sendActivateEmail(toMail string, uid string) response.SError {
+func GetEmailBindTemplate() *template.Template {
+	onceEmailBind.Do(func() {
+		emailActivateTmpl, _ = template.New("mail-bind-tmpl").Parse(emailBindTmplStr)
+	})
+	return emailBindTmpl
+}
+
+func (c *UserCtrl) sendActivateEmail(toMail string, uid dal.UID) response.SError {
 	mailExecutor := service.GetMailExecutor()
 	// prepare email message
 	claims := &jwt.RegisteredClaims{
 		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(emailActivateCodeExpireTime)),
-		ID:        uid,
+		ID:        string(uid),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
@@ -65,7 +94,7 @@ func (c *UserCtrl) sendActivateEmail(toMail string, uid string) response.SError 
 	}
 
 	data := &bytes.Buffer{}
-	err = GetEmailTemplate().Execute(data, &emailActivateTmplFiller{
+	err = GetEmailActivateTemplate().Execute(data, &emailActivateTmplFiller{
 		From: mailExecutor.Sender(),
 		To:   toMail,
 		ActiveLink: fmt.Sprintf("%s?%s=%s", config.GlobalConfig.EmailService.ActivateURI,
@@ -76,31 +105,66 @@ func (c *UserCtrl) sendActivateEmail(toMail string, uid string) response.SError 
 	}
 
 	// send email
-	err = mailExecutor.SendMail([]string{string(toMail)}, data.Bytes())
+	err = mailExecutor.SendMail([]string{toMail}, data.Bytes())
 	if err != nil {
 		return response.ErrroCode_InternalUnknownError.Wrap(err, "send email fail")
 	}
 	return nil
 }
 
-func (c *UserCtrl) EmailRegister(email string, password *dal.Password) response.SError {
+func (c *UserCtrl) sendEmailBindEmail(toMail string, uid dal.UID) response.SError {
+	mailExecutor := service.GetMailExecutor()
+	// prepare email message
+	claims := &jwt.RegisteredClaims{
+		Subject:   toMail,
+		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(emailActivateCodeExpireTime)),
+		ID:        string(uid),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	tokenStr, err := token.SignedString([]byte(config.GlobalConfig.JWT.Cypher))
+	if err != nil {
+		return response.ErrroCode_InternalUnknownError.Wrap(err, "sign bind code fail")
+	}
+
+	data := &bytes.Buffer{}
+	err = GetEmailActivateTemplate().Execute(data, &emailBindTmplFiller{
+		From: mailExecutor.Sender(),
+		To:   toMail,
+		BindLink: fmt.Sprintf("%s?%s=%s", config.GlobalConfig.EmailService.BindURI,
+			config.GlobalConfig.EmailService.BindParam, tokenStr),
+	})
+	if err != nil {
+		return response.ErrroCode_InternalUnknownError.Wrap(err, "fill email bind template fail")
+	}
+
+	// send email
+	err = mailExecutor.SendMail([]string{toMail}, data.Bytes())
+	if err != nil {
+		return response.ErrroCode_InternalUnknownError.Wrap(err, "send email fail")
+	}
+	return nil
+}
+
+func (c *UserCtrl) EmailRegister(email string, password *dal.Password) (dal.UID, response.SError) {
 	db := service.GetDBExecutor()
 	user, sErr := dal.UserDBHD.GetByEmail(db, email)
 	if sErr != nil {
-		return sErr
+		return "", sErr
 	}
 	if user != nil {
-		return response.ErrorCode_UserNoPermission.New("email already registered")
+		return "", response.ErrorCode_UserNoPermission.New("email already registered")
 	}
 
 	uea, sErr := dal.UserEmailActivateDBHD.GetByEmail(db, email)
 	if sErr != nil {
-		return sErr
+		return "", sErr
 	}
 	now := time.Now().UTC()
+	var uid dal.UID
 	if uea != nil { // means the email already registered but not activated yet
 		if uea.SendAt.Add(emailActivateAllowedInterval).After(now) {
-			return response.ErrorCode_UserNoPermission.New("the email is send within one minutes, try later")
+			return "", response.ErrorCode_UserNoPermission.New("the email is send within one minutes, try later")
 		}
 
 		sErr = WithDBTx(func(tx *gorm.DB) response.SError {
@@ -108,19 +172,20 @@ func (c *UserCtrl) EmailRegister(email string, password *dal.Password) response.
 			if sErr != nil {
 				return sErr
 			}
-			sErr = c.sendActivateEmail(email, string(uea.UID))
+			sErr = c.sendActivateEmail(email, uea.UID)
 			if sErr != nil {
 				return sErr
 			}
 			return nil
 		})
 		if sErr != nil {
-			return sErr
+			return "", sErr
 		}
+		uid = uea.UID
 	} else { // means the email has not been registered
-		uid := uuid.New().String()
+		uid = dal.UID(uuid.New().String())
 		uea = &dal.UserEmailActivate{
-			UID:       dal.UID(uid),
+			UID:       uid,
 			Email:     email,
 			Password:  password,
 			SendAt:    now,
@@ -141,10 +206,10 @@ func (c *UserCtrl) EmailRegister(email string, password *dal.Password) response.
 		})
 
 		if sErr != nil {
-			return sErr
+			return "", sErr
 		}
 	}
-	return nil
+	return uid, nil
 }
 
 func (c *UserCtrl) EmailActivate(activateCode string) (*dal.User, string /*user token*/, response.SError) {
@@ -206,4 +271,45 @@ func (c *UserCtrl) EmailActivate(activateCode string) (*dal.User, string /*user 
 		return nil, "", sErr
 	}
 	return user, tokenStr, nil
+}
+
+func (c *UserCtrl) StartEmailBinding(uid dal.UID, email string) response.SError {
+	db := service.GetDBExecutor()
+	user, sErr := dal.UserDBHD.GetByUID(db, uid)
+	if sErr != nil {
+		return sErr
+	}
+
+	if user == nil {
+		return response.ErrorCode_InvalidParam.New("no user found")
+	}
+
+	if user.Email.Get() == email {
+		return response.ErrorCode_InvalidParam.New("same email with the email already bond")
+	}
+
+	sErr = c.sendEmailBindEmail(email, uid)
+	if sErr != nil {
+		return sErr
+	}
+
+	return nil
+}
+
+func (c *UserCtrl) ConfirmBindEmail(bindCode string) response.SError {
+	// verify bind code
+	claims := &jwt.RegisteredClaims{}
+	_, err := jwt.ParseWithClaims(bindCode, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(config.GlobalConfig.JWT.Cypher), nil
+	})
+	if err != nil {
+		return response.ErrorCode_UserNoPermission.Wrap(err, "invalid activate code")
+	}
+
+	db := service.GetDBExecutor()
+	sErr := dal.UserDBHD.UpdateEmail(db, dal.UID(claims.ID), claims.Subject)
+	if sErr != nil {
+		return sErr
+	}
+	return nil
 }
