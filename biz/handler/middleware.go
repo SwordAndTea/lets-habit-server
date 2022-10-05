@@ -10,6 +10,7 @@ import (
 
 const UIDKey = "uid"
 
+// UserTokenVerify verify user token, return user auth fail error if verify fail, set uid to RequestContext if success
 func UserTokenVerify() app.HandlerFunc {
 	return func(ctx context.Context, rc *app.RequestContext) {
 		resp := response.NewHTTPResponse(rc)

@@ -23,6 +23,7 @@ var onceEmailBind = &sync.Once{}
 var emailActivateTmpl *template.Template
 var emailBindTmpl *template.Template
 
+// emailActivateTmplStr the email template used for user registering from email
 const emailActivateTmplStr = `From: {{.From}}
 To: {{.To}}
 Subject: [lets-habits] 邮箱激活 (mail activate)
@@ -35,6 +36,7 @@ welcome To join lets-habits, click the link below to activate your account:
 {{.ActiveLink}}
 `
 
+// emailBindTmplStr the email template used for user to bind an email address
 const emailBindTmplStr = `From: {{.From}}
 To: {{.To}}
 Subject: [lets-habits] 邮箱绑定 (mail activate)
@@ -49,8 +51,13 @@ you are current binding email for account, if it's your operation, click the lin
 otherwise, please ignore this message
 `
 
+// emailActivateAllowedInterval the max time interval that allow a user to resend account activate email
 const emailActivateAllowedInterval = time.Minute
-const emailActivateCodeExpireTime = time.Minute * 10
+
+// emailCodeExpireTime the token expired time for email activate and bind
+const emailCodeExpireTime = time.Minute * 10
+
+// userTokenExpireTime user auth token expire time: 3 day
 const userTokenExpireTime = time.Hour * 72
 
 type emailActivateTmplFiller struct {
@@ -65,6 +72,7 @@ type emailBindTmplFiller struct {
 	BindLink string
 }
 
+// GetEmailActivateTemplate lazy load email activate template
 func GetEmailActivateTemplate() *template.Template {
 	onceEmailActivate.Do(func() {
 		emailActivateTmpl, _ = template.New("mail-activate-tmpl").Parse(emailActivateTmplStr)
@@ -72,6 +80,7 @@ func GetEmailActivateTemplate() *template.Template {
 	return emailActivateTmpl
 }
 
+// GetEmailBindTemplate lazy load email bind template
 func GetEmailBindTemplate() *template.Template {
 	onceEmailBind.Do(func() {
 		emailActivateTmpl, _ = template.New("mail-bind-tmpl").Parse(emailBindTmplStr)
@@ -79,11 +88,12 @@ func GetEmailBindTemplate() *template.Template {
 	return emailBindTmpl
 }
 
+// sendActivateEmail send email activate email to targe email address
 func (c *UserCtrl) sendActivateEmail(toMail string, uid dal.UID) response.SError {
 	mailExecutor := service.GetMailExecutor()
 	// prepare email message
 	claims := &jwt.RegisteredClaims{
-		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(emailActivateCodeExpireTime)),
+		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(emailCodeExpireTime)),
 		ID:        string(uid),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -112,12 +122,13 @@ func (c *UserCtrl) sendActivateEmail(toMail string, uid dal.UID) response.SError
 	return nil
 }
 
+// sendEmailBindEmail send email bind email to target email address
 func (c *UserCtrl) sendEmailBindEmail(toMail string, uid dal.UID) response.SError {
 	mailExecutor := service.GetMailExecutor()
 	// prepare email message
 	claims := &jwt.RegisteredClaims{
 		Subject:   toMail,
-		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(emailActivateCodeExpireTime)),
+		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(emailCodeExpireTime)),
 		ID:        string(uid),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -128,7 +139,7 @@ func (c *UserCtrl) sendEmailBindEmail(toMail string, uid dal.UID) response.SErro
 	}
 
 	data := &bytes.Buffer{}
-	err = GetEmailActivateTemplate().Execute(data, &emailBindTmplFiller{
+	err = GetEmailBindTemplate().Execute(data, &emailBindTmplFiller{
 		From: mailExecutor.Sender(),
 		To:   toMail,
 		BindLink: fmt.Sprintf("%s?%s=%s", config.GlobalConfig.EmailService.BindURI,
@@ -146,6 +157,7 @@ func (c *UserCtrl) sendEmailBindEmail(toMail string, uid dal.UID) response.SErro
 	return nil
 }
 
+// EmailRegister do email register, will send an email activate email to user
 func (c *UserCtrl) EmailRegister(email string, password *dal.Password) (dal.UID, response.SError) {
 	db := service.GetDBExecutor()
 	user, sErr := dal.UserDBHD.GetByEmail(db, email)
@@ -212,6 +224,7 @@ func (c *UserCtrl) EmailRegister(email string, password *dal.Password) (dal.UID,
 	return uid, nil
 }
 
+// EmailActivate confirm email activate, create a new user if activate success
 func (c *UserCtrl) EmailActivate(activateCode string) (*dal.User, string /*user token*/, response.SError) {
 	// verify activate code
 	claims := &jwt.RegisteredClaims{}
@@ -273,6 +286,7 @@ func (c *UserCtrl) EmailActivate(activateCode string) (*dal.User, string /*user 
 	return user, tokenStr, nil
 }
 
+// StartEmailBinding begin email bind process, will send an email bind email to user
 func (c *UserCtrl) StartEmailBinding(uid dal.UID, email string) response.SError {
 	db := service.GetDBExecutor()
 	user, sErr := dal.UserDBHD.GetByUID(db, uid)
@@ -296,6 +310,7 @@ func (c *UserCtrl) StartEmailBinding(uid dal.UID, email string) response.SError 
 	return nil
 }
 
+// ConfirmBindEmail confirm bind user email, update user email info
 func (c *UserCtrl) ConfirmBindEmail(bindCode string) response.SError {
 	// verify bind code
 	claims := &jwt.RegisteredClaims{}

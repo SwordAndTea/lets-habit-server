@@ -8,11 +8,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// UserRegisterType indentify how user is registered
 type UserRegisterType string
 
 const (
-	UserRegisterTypeEmail  UserRegisterType = "email"
-	UserRegisterTypeWechat UserRegisterType = "wechat"
+	UserRegisterTypeEmail  UserRegisterType = "email"  // user registered directly with email
+	UserRegisterTypeWechat UserRegisterType = "wechat" // user registered with wechat oauth
 )
 
 // User the user registered
@@ -27,6 +28,8 @@ type User struct {
 	UserRegisterType UserRegisterType    `json:"user_register_type"`
 }
 
+// postProcessUserField process some field after User data is fetched from db,
+// basically is some field related with time and url
 func postProcessUserField(users []*User) {
 	for _, u := range users {
 		if u.Portrait.NotNull() {
@@ -89,6 +92,7 @@ func (hd *userDBHD) ListByUIDs(db *gorm.DB, uids []UID) ([]*User, response.SErro
 	return users, nil
 }
 
+// UpdateEmail update user email field
 func (hd *userDBHD) UpdateEmail(db *gorm.DB, uid UID, email string) response.SError {
 	err := db.Model(&User{}).Where("uid=?", uid).Update("email", email).Error
 	if err != nil {
