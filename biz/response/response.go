@@ -33,6 +33,7 @@ type SError interface {
 	Relocation() SError
 }
 
+// sErrorImpl the default implement of SError
 type sErrorImpl struct {
 	errorCode ErrorCode
 	codeLine  string

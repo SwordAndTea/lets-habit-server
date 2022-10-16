@@ -17,11 +17,13 @@ type UserEmailActivate struct {
 	Activated bool      `json:"activated"`
 }
 
-type userEmailActivateDBHD struct {
-}
+// userEmailActivateDBHD the handler to operate the user_email_activate table
+type userEmailActivateDBHD struct{}
 
+// UserEmailActivateDBHD the default userEmailActivateDBHD
 var UserEmailActivateDBHD = &userEmailActivateDBHD{}
 
+// Add insert a UserEmailActivate record
 func (hd *userEmailActivateDBHD) Add(db *gorm.DB, uea *UserEmailActivate) response.SError {
 	err := db.Create(&uea).Error
 	if err != nil {
@@ -30,6 +32,7 @@ func (hd *userEmailActivateDBHD) Add(db *gorm.DB, uea *UserEmailActivate) respon
 	return nil
 }
 
+// GetByUID get a UserEmailActivate record by user id
 func (hd *userEmailActivateDBHD) GetByUID(db *gorm.DB, uid UID) (*UserEmailActivate, response.SError) {
 	var uea *UserEmailActivate
 	err := db.Where("uid=?", uid).First(&uea).Error
@@ -42,6 +45,7 @@ func (hd *userEmailActivateDBHD) GetByUID(db *gorm.DB, uid UID) (*UserEmailActiv
 	return uea, nil
 }
 
+// GetByEmail get a UserEmailActivate record by user email
 func (hd *userEmailActivateDBHD) GetByEmail(db *gorm.DB, email string) (*UserEmailActivate, response.SError) {
 	var uea *UserEmailActivate
 	err := db.Where("email=?", email).First(&uea).Error
@@ -54,6 +58,7 @@ func (hd *userEmailActivateDBHD) GetByEmail(db *gorm.DB, email string) (*UserEma
 	return uea, nil
 }
 
+// UpdateSendTime update email send time by record id
 func (hd *userEmailActivateDBHD) UpdateSendTime(db *gorm.DB, id uint64, sendAt time.Time) response.SError {
 	err := db.Model(&UserEmailActivate{}).Where("id=?", id).Update("send_at", sendAt).Error
 	if err != nil {
@@ -62,18 +67,11 @@ func (hd *userEmailActivateDBHD) UpdateSendTime(db *gorm.DB, id uint64, sendAt t
 	return nil
 }
 
+// SetActivated mark user email activated by record id
 func (hd *userEmailActivateDBHD) SetActivated(db *gorm.DB, id uint64) response.SError {
 	err := db.Model(&UserEmailActivate{}).Where("id=?", id).Update("activated", true).Error
 	if err != nil {
 		return response.ErrroCode_InternalUnknownError.Wrap(err, "update send time fail")
-	}
-	return nil
-}
-
-func (hd *userEmailActivateDBHD) DeleteByUID(db *gorm.DB, uid UID) response.SError {
-	err := db.Where("uid=?", uid).Delete(&UserEmailActivate{}).Error
-	if err != nil {
-		return response.ErrroCode_InternalUnknownError.Wrap(err, "delete inactivated user fail")
 	}
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 // UID user id
 type UID string
 
+// Password a tool model to represent a hashed encrypted passport
 type Password struct {
 	Data   string
 	Hashed bool
@@ -21,6 +22,7 @@ func NewRawPassword(data string) *Password {
 	}
 }
 
+// Scan an implement of sql.Scanner
 func (p *Password) Scan(value interface{}) error {
 	if value == nil {
 		return nil
@@ -37,6 +39,7 @@ func (p *Password) Scan(value interface{}) error {
 	return nil
 }
 
+// Value an implement of driver.Valuer
 func (p *Password) Value() (driver.Value, error) {
 	if p.Hashed {
 		return p.Data, nil

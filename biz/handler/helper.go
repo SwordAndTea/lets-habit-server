@@ -11,6 +11,7 @@ func BindAndValidateErr(err error) response.SError {
 
 var verifier = emailverify.NewVerifier().EnableSMTPCheck().EnableAutoUpdateDisposable()
 
+// ValidateEmail validate whether an email is reachable
 func ValidateEmail(e string) response.SError {
 	ret, err := verifier.Verify(e)
 	if err != nil {
@@ -29,6 +30,9 @@ func ValidateEmail(e string) response.SError {
 	return nil
 }
 
+// ValidatePassword validate whether a password is valid passport,
+// currently the only limitation is that the length of a password should more than eight
+// TODO: add character check
 func ValidatePassword(p string) response.SError {
 	if len(p) < 8 {
 		return response.ErrorCode_InvalidParam.New("password length is less than eight")
