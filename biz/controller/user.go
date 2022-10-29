@@ -2,6 +2,7 @@ package controller
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
@@ -10,7 +11,10 @@ import (
 	"github.com/swordandtea/fhwh/biz/response"
 	"github.com/swordandtea/fhwh/biz/service"
 	"github.com/swordandtea/fhwh/nullable"
+	"github.com/swordandtea/fhwh/util"
 	"gorm.io/gorm"
+	"io"
+	"mime/multipart"
 	"sync"
 	"text/template"
 	"time"
@@ -322,9 +326,79 @@ func (c *UserCtrl) ConfirmBindEmail(bindCode string) response.SError {
 	}
 
 	db := service.GetDBExecutor()
-	sErr := dal.UserDBHD.UpdateEmail(db, dal.UID(claims.ID), claims.Subject)
+	sErr := dal.UserDBHD.UpdateUser(db, dal.UID(claims.ID), &dal.UserUpdatableFields{
+		Email: claims.Subject,
+	})
 	if sErr != nil {
 		return sErr
 	}
 	return nil
+}
+
+const PortraitSizeLimit = 10 * 1024 * 1024 // 10M
+
+type UpdateUserBaseInfoFields struct {
+	Name     string
+	Portrait *multipart.FileHeader
+}
+
+func (c *UserCtrl) UpdateUserBaseInfo(uid dal.UID, updateFields *UpdateUserBaseInfoFields) (*dal.User, response.SError) {
+	ctx := context.Background()
+	db := service.GetDBExecutor()
+	user, sErr := dal.UserDBHD.GetByUID(db, uid)
+	if sErr != nil {
+		return nil, sErr
+	}
+	if user == nil {
+		return nil, response.ErrorCode_InvalidParam.New("invalid uid, no user found")
+	}
+
+	updates := &dal.UserUpdatableFields{}
+	if updateFields.Name != "" {
+		updates.Name = updateFields.Name
+		user.Name = nullable.MakeNullString(updateFields.Name)
+	}
+
+	var portraitData []byte
+
+	if updateFields.Portrait != nil {
+		if updateFields.Portrait.Size > PortraitSizeLimit {
+			return nil, response.ErrorCode_InvalidParam.New("file size beyond limit")
+		}
+		fReader, err := updateFields.Portrait.Open()
+		if err != nil {
+			return nil, response.ErrroCode_InternalUnknownError.Wrap(err, "open portrait file fail")
+		}
+		portraitData, err = io.ReadAll(fReader)
+		if err != nil {
+			return nil, response.ErrroCode_InternalUnknownError.Wrap(err, "read portrait data fail")
+		}
+		imageFormat := util.ParseRawImageFormat(portraitData)
+		if imageFormat == util.ImgFormatUnknown {
+			return nil, response.ErrorCode_InvalidParam.Wrap(err, "unsupported image format type")
+		}
+		updates.Portrait = fmt.Sprintf("portrait/%s.%s", uid, imageFormat)
+		user.Portrait = nullable.MakeNullString(updates.Portrait)
+		user.PortraitURL = service.GetObjectStorageExecutor().ObjectKeyToURL(updates.Portrait)
+	}
+
+	sErr = WithDBTx(func(tx *gorm.DB) response.SError {
+		sErr = dal.UserDBHD.UpdateUser(tx, uid, updates)
+		if sErr != nil {
+			return sErr
+		}
+		if len(portraitData) > 0 {
+			osExecutor := service.GetObjectStorageExecutor()
+			err := osExecutor.PutObject(ctx, updates.Portrait, portraitData)
+			if err != nil {
+				return response.ErrroCode_InternalUnknownError.Wrap(err, "put portrait data fail")
+			}
+		}
+		return nil
+	})
+	if sErr != nil {
+		return nil, sErr
+	}
+
+	return user, nil
 }

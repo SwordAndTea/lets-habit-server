@@ -6,6 +6,7 @@ import (
 	"github.com/swordandtea/fhwh/biz/controller"
 	"github.com/swordandtea/fhwh/biz/dal"
 	"github.com/swordandtea/fhwh/biz/response"
+	"mime/multipart"
 )
 
 type UserRouter struct {
@@ -178,4 +179,51 @@ func (r *UserRouter) ConfirmBindEmail(ctx context.Context, rc *app.RequestContex
 		resp.SetError(sErr)
 		return
 	}
+}
+
+/*********************** User Router Update User Base Info Handler ***********************/
+
+type UpdateUserBaseInfoRequest struct {
+	Name     string                `form:"name"`
+	Portrait *multipart.FileHeader `form:"portrait"`
+}
+
+func (r *UpdateUserBaseInfoRequest) validate() response.SError {
+	if r.Portrait == nil || r.Portrait.Size == 0 {
+		return response.ErrorCode_InvalidParam.New("portrait file empty")
+	}
+	return nil
+}
+
+type UpdateUserBaseInfoResponse struct {
+	User *dal.User `json:"user"`
+}
+
+func (r *UserRouter) UpdateUserBaseInfo(ctx context.Context, rc *app.RequestContext) {
+	resp := response.NewHTTPResponse(rc)
+	defer resp.ReturnWithLog(ctx, rc)
+
+	req := &UpdateUserBaseInfoRequest{}
+	err := rc.BindAndValidate(req)
+	if err != nil {
+		resp.SetError(BindAndValidateErr(err))
+		return
+	}
+
+	sErr := req.validate()
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+
+	uid := rc.GetString(UIDKey)
+	user, sErr := r.Ctrl.UpdateUserBaseInfo(dal.UID(uid), &controller.UpdateUserBaseInfoFields{
+		Name:     req.Name,
+		Portrait: req.Portrait,
+	})
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+	resp.SetSuccessData(&UpdateUserBaseInfoResponse{User: user})
 }

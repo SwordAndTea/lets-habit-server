@@ -92,11 +92,35 @@ func (hd *userDBHD) ListByUIDs(db *gorm.DB, uids []UID) ([]*User, response.SErro
 	return users, nil
 }
 
-// UpdateEmail update user email field
-func (hd *userDBHD) UpdateEmail(db *gorm.DB, uid UID, email string) response.SError {
-	err := db.Model(&User{}).Where("uid=?", uid).Update("email", email).Error
+type UserUpdatableFields struct {
+	Name     string
+	Email    string
+	Password *Password
+	Portrait string
+}
+
+// UpdateUser update user field
+func (hd *userDBHD) UpdateUser(db *gorm.DB, uid UID, updateFields *UserUpdatableFields) response.SError {
+	updates := map[string]interface{}{}
+	if updateFields.Name != "" {
+		updates["name"] = updateFields.Name
+	}
+	if updateFields.Email != "" {
+		updates["email"] = updateFields.Email
+	}
+	if updateFields.Password != nil {
+		updates["passport"] = updateFields.Password
+	}
+	if updateFields.Portrait != "" {
+		updates["portrait"] = updateFields.Portrait
+	}
+
+	if len(updates) == 0 {
+		return nil
+	}
+	err := db.Model(&User{}).Where("uid=?", uid).Updates(updates).Error
 	if err != nil {
-		return response.ErrroCode_InternalUnknownError.Wrap(err, "update user email fail")
+		return response.ErrroCode_InternalUnknownError.Wrap(err, "update user fail")
 	}
 	return nil
 }
