@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
-	"github.com/swordandtea/fhwh/util"
+	"github.com/swordandtea/lets-habit-server/util"
 	"net/http"
 	"os"
 	"path"

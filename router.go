@@ -4,7 +4,7 @@ package main
 
 import (
 	"github.com/cloudwego/hertz/pkg/app/server"
-	"github.com/swordandtea/fhwh/biz/handler"
+	"github.com/swordandtea/lets-habit-server/biz/handler"
 )
 
 // customizeRegister registers customize routers.
@@ -18,10 +18,20 @@ func customizedRegister(r *server.Hertz) {
 	userRouter := handler.NewUserRouter()
 	{
 		apiV1.POST("/user/register/email", userRouter.RegisterByEmail)
-		apiV1.GET("/user/register/email/activate", userRouter.ActivateEmail)
+		apiV1.GET("/user/register/email/activate/check", userRouter.CheckEmailActivated)
+		apiV1.POST("/user/register/email/activate/resend", userRouter.ResendActivateEmail)
+		apiV1.POST("/user/register/email/activate", userRouter.ActivateEmail)
+		apiV1.POST("/user/login/email", userRouter.LoginByEmail)
+
 		apiV1.PUT("/user/base", userRouter.UpdateUserBaseInfo)
 
 		apiV1.POST("/user/email/bind", handler.UserTokenVerify(), userRouter.SubmitBindEmail)
 		apiV1.GET("/user/email/bind/confirm", userRouter.ConfirmBindEmail)
+	}
+
+	// register habit related api
+	habitRouter := handler.NewHabitRouter()
+	{
+		apiV1.POST("/habit", habitRouter.CreateHabit)
 	}
 }

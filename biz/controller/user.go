@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
-	"github.com/swordandtea/fhwh/biz/config"
-	"github.com/swordandtea/fhwh/biz/dal"
-	"github.com/swordandtea/fhwh/biz/response"
-	"github.com/swordandtea/fhwh/biz/service"
-	"github.com/swordandtea/fhwh/nullable"
-	"github.com/swordandtea/fhwh/util"
+	"github.com/swordandtea/lets-habit-server/biz/config"
+	"github.com/swordandtea/lets-habit-server/biz/dal"
+	"github.com/swordandtea/lets-habit-server/biz/response"
+	"github.com/swordandtea/lets-habit-server/biz/service"
+	"github.com/swordandtea/lets-habit-server/nullable"
+	"github.com/swordandtea/lets-habit-server/util"
 	"gorm.io/gorm"
 	"io"
 	"mime/multipart"
@@ -36,7 +36,7 @@ Content-Type: text/plain; charset=utf-8
 欢迎加入lets-habits，点击下方链接以激活账户:
 {{.ActiveLink}}
 
-welcome To join lets-habits, click the link below to activate your account:
+Welcome to join lets-habits, click the link below to activate your account:
 {{.ActiveLink}}
 `
 
@@ -50,7 +50,7 @@ Content-Type: text/plain; charset=utf-8
 {{.BindLink}}
 如果你没有操作绑定此邮箱，请忽略此邮件
 
-you are current binding email for account, if it's your operation, click the link below to bind:
+You are current binding email for account, if it's your operation, click the link below to bind:
 {{.BindLink}}
 otherwise, please ignore this message
 `
@@ -59,10 +59,10 @@ otherwise, please ignore this message
 const emailActivateAllowedInterval = time.Minute
 
 // emailCodeExpireTime the token expired time for email activate and bind
-const emailCodeExpireTime = time.Minute * 10
+const emailCodeExpireTime = time.Minute * 30
 
-// userTokenExpireTime user auth token expire time: 3 day
-const userTokenExpireTime = time.Hour * 72
+// userTokenExpireTime user auth token expire time: 7 day
+const userTokenExpireTime = time.Hour * 24 * 7
 
 type emailActivateTmplFiller struct {
 	From       string
@@ -96,12 +96,12 @@ func GetEmailBindTemplate() *template.Template {
 func (c *UserCtrl) sendActivateEmail(toMail string, uid dal.UID) response.SError {
 	mailExecutor := service.GetMailExecutor()
 	// prepare email message
+	// generate activate token
 	claims := &jwt.RegisteredClaims{
 		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(emailCodeExpireTime)),
 		ID:        string(uid),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
 	tokenStr, err := token.SignedString([]byte(config.GlobalConfig.JWT.Cypher))
 	if err != nil {
 		return response.ErrroCode_InternalUnknownError.Wrap(err, "sign activate code fail")
@@ -172,60 +172,72 @@ func (c *UserCtrl) EmailRegister(email string, password *dal.Password) (dal.UID,
 		return "", response.ErrorCode_UserNoPermission.New("email already registered")
 	}
 
-	uea, sErr := dal.UserEmailActivateDBHD.GetByEmail(db, email)
+	uid := dal.UID(uuid.New().String())
+
+	user = &dal.User{
+		UID:              uid,
+		Email:            nullable.MakeNullString(email),
+		EmailActive:      nullable.MakeNullBool(false),
+		Password:         password,
+		UserRegisterType: dal.UserRegisterTypeEmail,
+	}
+
+	sErr = WithDBTx(func(tx *gorm.DB) response.SError {
+		sErr = dal.UserDBHD.Add(tx, user)
+		if sErr != nil {
+			return sErr
+		}
+
+		sErr = c.sendActivateEmail(email, uid)
+		if sErr != nil {
+			return sErr
+		}
+		return nil
+	})
+
 	if sErr != nil {
 		return "", sErr
 	}
-	now := time.Now().UTC()
-	var uid dal.UID
-	if uea != nil { // means the email already registered but not activated yet
-		if uea.SendAt.Add(emailActivateAllowedInterval).After(now) {
-			return "", response.ErrorCode_UserNoPermission.New("the email is send within one minutes, try later")
-		}
-
-		sErr = WithDBTx(func(tx *gorm.DB) response.SError {
-			sErr = dal.UserEmailActivateDBHD.UpdateSendTime(tx, uea.ID, now)
-			if sErr != nil {
-				return sErr
-			}
-			sErr = c.sendActivateEmail(email, uea.UID)
-			if sErr != nil {
-				return sErr
-			}
-			return nil
-		})
-		if sErr != nil {
-			return "", sErr
-		}
-		uid = uea.UID
-	} else { // means the email has not been registered
-		uid = dal.UID(uuid.New().String())
-		uea = &dal.UserEmailActivate{
-			UID:       uid,
-			Email:     email,
-			Password:  password,
-			SendAt:    now,
-			Activated: false,
-		}
-
-		sErr = WithDBTx(func(tx *gorm.DB) response.SError {
-			sErr = dal.UserEmailActivateDBHD.Add(tx, uea)
-			if sErr != nil {
-				return sErr
-			}
-
-			sErr = c.sendActivateEmail(email, uid)
-			if sErr != nil {
-				return sErr
-			}
-			return nil
-		})
-
-		if sErr != nil {
-			return "", sErr
-		}
-	}
 	return uid, nil
+}
+
+// CheckEmailActivated check whether user has activated account email
+func (c *UserCtrl) CheckEmailActivated(uid dal.UID) (bool, response.SError) {
+	db := service.GetDBExecutor()
+	user, sErr := dal.UserDBHD.GetByUID(db, uid)
+	if sErr != nil {
+		return false, sErr
+	}
+	if user == nil {
+		return false, response.ErrorCode_InvalidParam.New("invalid uid")
+	}
+	return user.EmailActive.Get(), nil
+}
+
+func (c *UserCtrl) ResendActivateEmail(uid dal.UID) response.SError {
+	db := service.GetDBExecutor()
+	user, sErr := dal.UserDBHD.GetByUID(db, uid)
+	if sErr != nil {
+		return sErr
+	}
+
+	if user == nil { // means the email has not been registered
+		return response.ErrorCode_InvalidParam.New("user not registered")
+	}
+
+	if user.EmailActive.Get() { // email already activated
+		return response.ErrorCode_UserNoPermission.New("email already activated")
+	}
+
+	if user.UserRegisterType != dal.UserRegisterTypeEmail {
+		return response.ErrorCode_UserNoPermission.New("user not registered by email")
+	}
+
+	sErr = c.sendActivateEmail(user.Email.Get(), user.UID)
+	if sErr != nil {
+		return sErr
+	}
+	return nil
 }
 
 // EmailActivate confirm email activate, create a new user if activate success
@@ -239,45 +251,31 @@ func (c *UserCtrl) EmailActivate(activateCode string) (*dal.User, string /*user 
 		return nil, "", response.ErrorCode_UserNoPermission.Wrap(err, "invalid activate code")
 	}
 	db := service.GetDBExecutor()
-	uea, sErr := dal.UserEmailActivateDBHD.GetByUID(db, dal.UID(claims.ID))
+	uid := dal.UID(claims.ID)
+	user, sErr := dal.UserDBHD.GetByUID(db, uid)
 	if sErr != nil {
 		return nil, "", sErr
 	}
-	if uea == nil {
-		return nil, "", response.ErrorCode_UserNoPermission.Wrap(err, "invalid activate code, no user found")
+	if user == nil {
+		return nil, "", response.ErrorCode_InvalidParam.Wrap(err, "invalid activate code, no user found")
 	}
-	if uea.Activated {
+	if user.EmailActive.Get() {
 		return nil, "", response.ErrorCode_UserNoPermission.Wrap(err, "email already activated")
 	}
 
 	// do activate
 	var tokenStr string
-	var user *dal.User
 	sErr = WithDBTx(func(tx *gorm.DB) response.SError {
-		sErr = dal.UserEmailActivateDBHD.SetActivated(tx, uea.ID)
+		// mark user email activated
+		sErr = dal.UserDBHD.UpdateUser(tx, uid, &dal.UserUpdatableFields{EmailActive: nullable.MakeNullBool(true)})
 		if sErr != nil {
 			return sErr
 		}
-
-		user = &dal.User{
-			UID:              uea.UID,
-			Name:             nullable.NullString{},
-			Email:            nullable.MakeNullString(uea.Email),
-			Password:         uea.Password,
-			Portrait:         nullable.NullString{},
-			UserRegisterType: dal.UserRegisterTypeEmail,
-		}
-
-		sErr = dal.UserDBHD.Add(tx, user)
-		if sErr != nil {
-			return sErr
-		}
-
+		// gen user token
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, &jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(userTokenExpireTime)),
 			ID:        uuid.New().String(),
 		})
-
 		tokenStr, err = token.SignedString([]byte(config.GlobalConfig.JWT.Cypher))
 		if err != nil {
 			return response.ErrroCode_InternalUnknownError.Wrap(err, "sign user token fail")
@@ -333,6 +331,24 @@ func (c *UserCtrl) ConfirmBindEmail(bindCode string) response.SError {
 		return sErr
 	}
 	return nil
+}
+
+func (c *UserCtrl) LoginByEmail(email string, password *dal.Password) (*dal.User, response.SError) {
+	db := service.GetDBExecutor()
+	user, sErr := dal.UserDBHD.GetByEmail(db, email)
+	if sErr != nil {
+		return nil, sErr
+	}
+	if user == nil {
+		return nil, response.ErrorCode_InvalidParam.New("email not registered or activated")
+	}
+	if user.Password == nil {
+		return nil, response.ErrorCode_InvalidParam.New("user has not set password yet")
+	}
+	if user.Password.HashedValue() != password.HashedValue() {
+		return nil, response.ErrorCode_InvalidParam.New("wrong password")
+	}
+	return user, nil
 }
 
 const PortraitSizeLimit = 10 * 1024 * 1024 // 10M

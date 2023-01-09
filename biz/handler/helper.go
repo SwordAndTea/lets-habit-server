@@ -2,7 +2,11 @@ package handler
 
 import (
 	emailverify "github.com/AfterShip/email-verifier"
-	"github.com/swordandtea/fhwh/biz/response"
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/swordandtea/lets-habit-server/biz/config"
+	"github.com/swordandtea/lets-habit-server/biz/dal"
+	"github.com/swordandtea/lets-habit-server/biz/response"
+	"time"
 )
 
 func BindAndValidateErr(err error) response.SError {
@@ -20,9 +24,6 @@ func ValidateEmail(e string) response.SError {
 	if !ret.Syntax.Valid {
 		return response.ErrorCode_InvalidParam.New("invalid email syntax")
 	}
-	if !ret.Disposable {
-		return response.ErrorCode_InvalidParam.New("a disposable email is not allowed")
-	}
 	if !ret.SMTP.Deliverable && !ret.SMTP.CatchAll {
 		return response.ErrorCode_InvalidParam.New("can not send to this email address")
 	}
@@ -38,4 +39,65 @@ func ValidatePassword(p string) response.SError {
 		return response.ErrorCode_InvalidParam.New("password length is less than eight")
 	}
 	return nil
+}
+
+const UserTokenExpireTime = time.Hour * 24 * 7 // one week
+
+func GenerateUserToken(uid dal.UID) (string, response.SError) {
+	claims := &jwt.RegisteredClaims{
+		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(UserTokenExpireTime)),
+		ID:        string(uid),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	tokenStr, err := token.SignedString([]byte(config.GlobalConfig.JWT.Cypher))
+	if err != nil {
+		return "", response.ErrroCode_InternalUnknownError.Wrap(err, "generate user token fail")
+	}
+	return tokenStr, nil
+}
+
+func ExtractUserToken(token string) (dal.UID, response.SError) {
+	claims := &jwt.RegisteredClaims{}
+	_, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(config.GlobalConfig.JWT.Cypher), nil
+	})
+
+	if err != nil {
+		return "", response.ErrorCode_UserAuthFail.Wrap(err, "verify user token fail")
+	}
+
+	if claims.ID == "" {
+		return "", response.ErrorCode_UserAuthFail.Wrap(err, "invalid user token, no user id found")
+	}
+	return dal.UID(claims.ID), nil
+}
+
+func GeneratePollToken(uid dal.UID) (string, response.SError) {
+	claims := &jwt.RegisteredClaims{
+		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(time.Minute * 30)),
+		NotBefore: nil,
+		IssuedAt:  nil,
+		ID:        string(uid),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenStr, err := token.SignedString([]byte(config.GlobalConfig.JWT.Cypher))
+	if err != nil {
+		return "", response.ErrroCode_InternalUnknownError.Wrap(err, "generate poll token fail")
+	}
+	return tokenStr, nil
+}
+
+func ExtractPollToken(token string) (dal.UID, response.SError) {
+	claims := &jwt.RegisteredClaims{}
+	_, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(config.GlobalConfig.JWT.Cypher), nil
+	})
+	if err != nil {
+		return "", response.ErrorCode_UserNoPermission.Wrap(err, "invalid poll token")
+	}
+	if claims.ID == "" {
+		return "", response.ErrorCode_UserNoPermission.New("invalid poll token, no user id found")
+	}
+	return dal.UID(claims.ID), nil
 }

@@ -1,10 +1,11 @@
 package controller
 
 import (
-	"github.com/swordandtea/fhwh/biz/dal"
-	"github.com/swordandtea/fhwh/biz/response"
-	"github.com/swordandtea/fhwh/biz/service"
+	"github.com/swordandtea/lets-habit-server/biz/dal"
+	"github.com/swordandtea/lets-habit-server/biz/response"
+	"github.com/swordandtea/lets-habit-server/biz/service"
 	"gorm.io/gorm"
+	"time"
 )
 
 type HabitCtrl struct{}
@@ -16,7 +17,7 @@ type DetailedHabit struct {
 }
 
 // AddHabit add a habit and its group user info
-func (c *HabitCtrl) AddHabit(h *dal.Habit, uids []dal.UID) (*DetailedHabit, response.SError) {
+func (c *HabitCtrl) AddHabit(habit *dal.Habit, creator dal.UID, uids []dal.UID) (*DetailedHabit, response.SError) {
 	var sErr response.SError
 	var users []*dal.User
 	sErr = WithDBTx(func(tx *gorm.DB) response.SError {
@@ -28,16 +29,24 @@ func (c *HabitCtrl) AddHabit(h *dal.Habit, uids []dal.UID) (*DetailedHabit, resp
 			return response.ErrorCode_InvalidParam.New("has non-exist uid")
 		}
 
-		sErr = dal.HabitDBHD.Add(tx, h)
+		habit.Creator = creator
+		habit.CreateAt = time.Now().UTC()
+		sErr = dal.HabitDBHD.Add(tx, habit)
 		if sErr != nil {
 			return sErr
 		}
-		hgs := make([]*dal.HabitGroup, 0, len(uids))
+		hgs := make([]*dal.HabitGroup, 0, len(uids)+1)
+		hgs = append(hgs, &dal.HabitGroup{
+			HabitID: habit.ID,
+			UID:     creator,
+		})
 		for _, uid := range uids {
-			hgs = append(hgs, &dal.HabitGroup{
-				HabitID: h.ID,
-				UID:     uid,
-			})
+			if uid != creator {
+				hgs = append(hgs, &dal.HabitGroup{
+					HabitID: habit.ID,
+					UID:     uid,
+				})
+			}
 		}
 		sErr = dal.HabitGroupDBHD.AddMulti(tx, hgs)
 		if sErr != nil {
@@ -49,7 +58,7 @@ func (c *HabitCtrl) AddHabit(h *dal.Habit, uids []dal.UID) (*DetailedHabit, resp
 		return nil, sErr
 	}
 
-	return &DetailedHabit{Habit: h, UserGroup: users}, nil
+	return &DetailedHabit{Habit: habit, UserGroup: users}, nil
 }
 
 // GetHabitByID get a habit and its group info by habit id,
@@ -91,13 +100,13 @@ func (c *HabitCtrl) GetHabitByID(id uint64, uid dal.UID) (*DetailedHabit, respon
 }
 
 // ListHabitsByUID func get all the habit the user joined
-func (c *HabitCtrl) ListHabitsByUID(uid dal.UID) ([]*DetailedHabit, response.SError) {
+func (c *HabitCtrl) ListHabitsByUID(uid dal.UID, pagination *dal.Pagination) ([]*DetailedHabit, uint, response.SError) {
 	db := service.GetDBExecutor()
 
 	// get user joined habits
-	hs, sErr := dal.HabitDBHD.ListUserJoinedHabits(db, uid)
+	hs, total, sErr := dal.HabitDBHD.ListUserJoinedHabits(db, uid, pagination)
 	if sErr != nil {
-		return nil, sErr
+		return nil, 0, sErr
 	}
 	hsIDs := make([]uint64, 0, len(hs))
 	for _, h := range hs {
@@ -107,7 +116,7 @@ func (c *HabitCtrl) ListHabitsByUID(uid dal.UID) ([]*DetailedHabit, response.SEr
 	// get habit group info for all the habits above
 	hgs, sErr := dal.HabitGroupDBHD.ListByHabitIDs(db, hsIDs)
 	if sErr != nil {
-		return nil, sErr
+		return nil, 0, sErr
 	}
 
 	// get distinct uid and get the relation of habit with its all joined user
@@ -132,7 +141,7 @@ func (c *HabitCtrl) ListHabitsByUID(uid dal.UID) ([]*DetailedHabit, response.SEr
 	// get users and map users by its uid
 	users, sErr := dal.UserDBHD.ListByUIDs(db, uidList)
 	if sErr != nil {
-		return nil, sErr
+		return nil, 0, sErr
 	}
 	userIDUserMap := make(map[dal.UID]*dal.User)
 	for _, u := range users {
@@ -152,7 +161,7 @@ func (c *HabitCtrl) ListHabitsByUID(uid dal.UID) ([]*DetailedHabit, response.SEr
 			UserGroup: habitUsers,
 		})
 	}
-	return detailedHabits, nil
+	return detailedHabits, total, nil
 }
 
 // DeleteHabitByID delete a habit, only the owner can delete

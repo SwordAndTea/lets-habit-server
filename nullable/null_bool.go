@@ -82,7 +82,13 @@ func (b *NullBool) Scan(value interface{}) error {
 	}
 	bytes, ok := value.([]byte)
 	if !ok {
-		return ScanErrorWrapper("NullBool", value)
+		intValue, ok := value.(int64)
+		if !ok {
+			return ScanErrorWrapper("NullBool", value)
+		}
+		b.value = intValue == 1
+		b.nonnull = true
+		return nil
 	}
 	return b.UnmarshalString(string(bytes))
 }

@@ -4,17 +4,18 @@ import (
 	"context"
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/swordandtea/fhwh/biz/config"
-	"github.com/swordandtea/fhwh/biz/response"
+	"github.com/swordandtea/lets-habit-server/biz/config"
+	"github.com/swordandtea/lets-habit-server/biz/response"
 )
 
 const UIDKey = "uid"
+const UserTokenHeader = "x-lh-auth"
 
 // UserTokenVerify verify user token, return user auth fail error if verify fail, set uid to RequestContext if success
 func UserTokenVerify() app.HandlerFunc {
 	return func(ctx context.Context, rc *app.RequestContext) {
 		resp := response.NewHTTPResponse(rc)
-		userToken := string(rc.GetHeader("auth"))
+		userToken := string(rc.GetHeader(UserTokenHeader))
 		if userToken == "" {
 			resp.SetError(response.ErrorCode_UserAuthFail.New("no user token found"))
 			resp.Abort(ctx, rc)

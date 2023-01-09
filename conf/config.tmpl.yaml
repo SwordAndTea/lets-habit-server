@@ -2,7 +2,7 @@ local:
   log:
     level: DEBUG
   mysql:
-    dsn: 'root:123456@tcp(localhost:3306)/fhwf?charset=utf8mb4&parseTime=true'
+    dsn: 'root:123456@tcp(localhost:3306)/lets_habit?charset=utf8mb4&parseTime=true'
   email_service:
     sender: 'xxx@xxx.com'
     host: 'smtp.xxx.com'
@@ -23,7 +23,7 @@ test:
   email_service:
     sender: ''
     host: ''
-    port: ''
+    port: 0
     auth_code: ''
     activate_uri: ''
     activate_param: ''
@@ -38,7 +38,7 @@ prod:
   email_service:
     sender: ''
     host: ''
-    port: ''
+    port: 0
     auth_code: ''
     activate_uri: ''
     activate_param: ''

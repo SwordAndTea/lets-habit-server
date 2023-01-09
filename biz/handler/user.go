@@ -3,9 +3,10 @@ package handler
 import (
 	"context"
 	"github.com/cloudwego/hertz/pkg/app"
-	"github.com/swordandtea/fhwh/biz/controller"
-	"github.com/swordandtea/fhwh/biz/dal"
-	"github.com/swordandtea/fhwh/biz/response"
+	"github.com/swordandtea/lets-habit-server/biz/controller"
+	"github.com/swordandtea/lets-habit-server/biz/dal"
+	"github.com/swordandtea/lets-habit-server/biz/response"
+	"github.com/swordandtea/lets-habit-server/nullable"
 	"mime/multipart"
 )
 
@@ -27,7 +28,7 @@ type UserRegisterRequest struct {
 func (r *UserRegisterRequest) validate() response.SError {
 	sErr := ValidateEmail(r.Email)
 	if sErr != nil {
-		return response.ErrorCode_InvalidParam.New("invalid email")
+		return sErr
 	}
 	sErr = ValidatePassword(r.Password)
 	if sErr != nil {
@@ -37,7 +38,8 @@ func (r *UserRegisterRequest) validate() response.SError {
 }
 
 type UserRegisterResponse struct {
-	UID dal.UID `json:"uid"`
+	UID       dal.UID `json:"uid"`
+	PollToken string  `json:"poll_token"`
 }
 
 func (r *UserRouter) RegisterByEmail(ctx context.Context, rc *app.RequestContext) {
@@ -62,18 +64,92 @@ func (r *UserRouter) RegisterByEmail(ctx context.Context, rc *app.RequestContext
 		resp.SetError(sErr)
 		return
 	}
-	resp.SetSuccessData(&UserRegisterResponse{UID: uid})
+	pollToken, sErr := GeneratePollToken(uid)
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+	resp.SetSuccessData(&UserRegisterResponse{
+		UID:       uid,
+		PollToken: pollToken,
+	})
+}
+
+/*********************** User Router User Register Activate Email Check Handler ***********************/
+
+type EmailActivatedCheckRequest struct {
+	PollToken string `query:"poll_token"`
+}
+
+type EmailActivateCheckResponse struct {
+	Activated bool `json:"activated"`
+}
+
+func (r *UserRouter) CheckEmailActivated(ctx context.Context, rc *app.RequestContext) {
+	resp := response.NewHTTPResponse(rc)
+	defer resp.ReturnWithLog(ctx, rc)
+
+	req := &EmailActivatedCheckRequest{}
+	err := rc.BindAndValidate(req)
+	if err != nil {
+		resp.SetError(BindAndValidateErr(err))
+		return
+	}
+
+	uid, sErr := ExtractPollToken(req.PollToken)
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+
+	activated, sErr := r.Ctrl.CheckEmailActivated(uid)
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+
+	resp.SetSuccessData(&EmailActivateCheckResponse{Activated: activated})
+}
+
+/*********************** User Router User Register Resend Activate Email Handler ***********************/
+
+type ResendActivateEmailRequest struct {
+	PollToken string `json:"poll_token"`
+}
+
+func (r *UserRouter) ResendActivateEmail(ctx context.Context, rc *app.RequestContext) {
+	resp := response.NewHTTPResponse(rc)
+	defer resp.ReturnWithLog(ctx, rc)
+
+	req := &ResendActivateEmailRequest{}
+	err := rc.BindAndValidate(req)
+	if err != nil {
+		resp.SetError(BindAndValidateErr(err))
+		return
+	}
+
+	uid, sErr := ExtractPollToken(req.PollToken)
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+
+	sErr = r.Ctrl.ResendActivateEmail(uid)
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
 }
 
 /*********************** User Router User Register Activate Email Handler ***********************/
 
 type EmailActivateRequest struct {
-	Code string `query:"code"`
+	ActivateCode string `json:"activate_code"`
 }
 
 func (r *EmailActivateRequest) validate() response.SError {
-	if r.Code == "" {
-		return response.ErrorCode_InvalidParam.New("invalid code")
+	if r.ActivateCode == "" {
+		return response.ErrorCode_InvalidParam.New("empty activate code")
 	}
 	return nil
 }
@@ -99,13 +175,13 @@ func (r *UserRouter) ActivateEmail(ctx context.Context, rc *app.RequestContext) 
 		return
 	}
 
-	user, userToken, sErr := r.Ctrl.EmailActivate(req.Code)
+	user, userToken, sErr := r.Ctrl.EmailActivate(req.ActivateCode)
 	if sErr != nil {
 		resp.SetError(sErr)
 		return
 	}
 
-	rc.Response.Header.Set("X-User-Token", userToken)
+	rc.Response.Header.Set(UserTokenHeader, userToken)
 	resp.SetSuccessData(&EmailActivateResponse{User: user})
 }
 
@@ -147,11 +223,11 @@ func (r *UserRouter) SubmitBindEmail(ctx context.Context, rc *app.RequestContext
 /*********************** User Router User Confirm Bind Email Handler ***********************/
 
 type ConfirmBindEmailRequest struct {
-	Code string `query:"code"`
+	BindCode string `json:"bind_code"`
 }
 
 func (r *ConfirmBindEmailRequest) validate() response.SError {
-	if r.Code == "" {
+	if r.BindCode == "" {
 		return response.ErrorCode_InvalidParam.New("missing bind code")
 	}
 	return nil
@@ -174,11 +250,81 @@ func (r *UserRouter) ConfirmBindEmail(ctx context.Context, rc *app.RequestContex
 		return
 	}
 
-	sErr = r.Ctrl.ConfirmBindEmail(req.Code)
+	sErr = r.Ctrl.ConfirmBindEmail(req.BindCode)
 	if sErr != nil {
 		resp.SetError(sErr)
 		return
 	}
+}
+
+/*********************** User Router User Register By Email Handler ***********************/
+
+type UserLoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+func (r *UserLoginRequest) validate() response.SError {
+	if r.Email == "" {
+		return response.ErrorCode_InvalidParam.New("empty email")
+	}
+	if r.Password == "" {
+		return response.ErrorCode_InvalidParam.New("invalid password")
+	}
+	return nil
+}
+
+type UserLoginResponse struct {
+	User      *dal.User           `json:"user"`
+	PollToken nullable.NullString `json:"poll_token"`
+	UserToken nullable.NullString `json:"user_token"`
+}
+
+func (r *UserRouter) LoginByEmail(ctx context.Context, rc *app.RequestContext) {
+	resp := response.NewHTTPResponse(rc)
+	defer resp.ReturnWithLog(ctx, rc)
+
+	req := &UserLoginRequest{}
+	err := rc.BindAndValidate(req)
+	if err != nil {
+		resp.SetError(BindAndValidateErr(err))
+		return
+	}
+
+	sErr := req.validate()
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+
+	user, sErr := r.Ctrl.LoginByEmail(req.Email, dal.NewRawPassword(req.Password))
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+
+	pollToken := nullable.NullString{}
+	userToken := nullable.NullString{}
+	if user.UserRegisterType == dal.UserRegisterTypeEmail && !user.EmailActive.Get() {
+		pollTokenStr, sErr := GeneratePollToken(user.UID)
+		if sErr != nil {
+			resp.SetError(sErr)
+			return
+		}
+		pollToken.Set(pollTokenStr)
+	} else {
+		userTokenStr, sErr := GenerateUserToken(user.UID)
+		if sErr != nil {
+			resp.SetError(sErr)
+			return
+		}
+		userToken.Set(userTokenStr)
+	}
+	resp.SetSuccessData(&UserLoginResponse{
+		User:      user,
+		PollToken: pollToken,
+		UserToken: userToken,
+	})
 }
 
 /*********************** User Router Update User Base Info Handler ***********************/

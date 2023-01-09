@@ -4,14 +4,18 @@ package main
 
 import (
 	"github.com/cloudwego/hertz/pkg/app/server"
-	"github.com/swordandtea/fhwh/biz/config"
-	"github.com/swordandtea/fhwh/biz/service"
+	"github.com/hertz-contrib/cors"
+	"github.com/swordandtea/lets-habit-server/biz/config"
+	"github.com/swordandtea/lets-habit-server/biz/handler"
+	"github.com/swordandtea/lets-habit-server/biz/service"
+	"time"
 )
 
 func Init() {
 	if err := config.InitConfig("conf/config.yaml"); err != nil {
 		panic(err)
 	}
+
 	mysqlConf := config.GlobalConfig.Mysql
 	if err := service.InitDB(mysqlConf.DSN); err != nil {
 		panic(err)
@@ -27,6 +31,14 @@ func main() {
 	Init()
 
 	h := server.Default()
+	h.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://127.0.0.1:3000", "http://localhost:3000"},
+		AllowMethods:     []string{"GET", "PUT", "POST", "DELETE"},
+		AllowHeaders:     []string{"Origin", "Content-Type"},
+		ExposeHeaders:    []string{"Content-Length", handler.UserTokenHeader},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	register(h)
 	h.Spin()

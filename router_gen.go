@@ -4,7 +4,7 @@ package main
 
 import (
 	"github.com/cloudwego/hertz/pkg/app/server"
-	router "github.com/swordandtea/fhwh/biz/router"
+	router "github.com/swordandtea/lets-habit-server/biz/router"
 )
 
 // register registers all routers.

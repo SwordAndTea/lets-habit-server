@@ -1,7 +1,7 @@
 package dal
 
 import (
-	"github.com/swordandtea/fhwh/biz/response"
+	"github.com/swordandtea/lets-habit-server/biz/response"
 	"gorm.io/gorm"
 )
 

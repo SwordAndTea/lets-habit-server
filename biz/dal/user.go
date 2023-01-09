@@ -2,9 +2,9 @@ package dal
 
 import (
 	"github.com/pkg/errors"
-	"github.com/swordandtea/fhwh/biz/response"
-	"github.com/swordandtea/fhwh/biz/service"
-	"github.com/swordandtea/fhwh/nullable"
+	"github.com/swordandtea/lets-habit-server/biz/response"
+	"github.com/swordandtea/lets-habit-server/biz/service"
+	"github.com/swordandtea/lets-habit-server/nullable"
 	"gorm.io/gorm"
 )
 
@@ -22,6 +22,8 @@ type User struct {
 	UID              UID                 `json:"uid"`
 	Name             nullable.NullString `json:"name" gorm:"omit"`
 	Email            nullable.NullString `json:"email"`
+	EmailActive      nullable.NullBool   `json:"email_active"`
+	EmailBind        nullable.NullBool   `json:"email_bind"`
 	Password         *Password           `json:"-"`
 	Portrait         nullable.NullString `json:"-"` //portrait object storage Key
 	PortraitURL      string              `json:"portrait" gorm:"-"`
@@ -93,10 +95,12 @@ func (hd *userDBHD) ListByUIDs(db *gorm.DB, uids []UID) ([]*User, response.SErro
 }
 
 type UserUpdatableFields struct {
-	Name     string
-	Email    string
-	Password *Password
-	Portrait string
+	Name        string
+	Email       string
+	EmailActive nullable.NullBool
+	EmailBind   nullable.NullBool
+	Password    *Password
+	Portrait    string
 }
 
 // UpdateUser update user field
@@ -107,6 +111,12 @@ func (hd *userDBHD) UpdateUser(db *gorm.DB, uid UID, updateFields *UserUpdatable
 	}
 	if updateFields.Email != "" {
 		updates["email"] = updateFields.Email
+	}
+	if updateFields.EmailActive.NotNull() {
+		updates["email_active"] = updateFields.EmailActive.Get()
+	}
+	if updateFields.EmailBind.NotNull() {
+		updates["email_bind"] = updateFields.EmailBind.Get()
 	}
 	if updateFields.Password != nil {
 		updates["passport"] = updateFields.Password

@@ -1,8 +1,8 @@
 package controller
 
 import (
-	"github.com/swordandtea/fhwh/biz/response"
-	"github.com/swordandtea/fhwh/biz/service"
+	"github.com/swordandtea/lets-habit-server/biz/response"
+	"github.com/swordandtea/lets-habit-server/biz/service"
 	"gorm.io/gorm"
 )
 

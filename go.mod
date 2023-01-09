@@ -1,4 +1,4 @@
-module github.com/swordandtea/fhwh
+module github.com/swordandtea/lets-habit-server
 
 go 1.19
 
@@ -7,6 +7,7 @@ require (
 	github.com/cloudwego/hertz v0.3.2
 	github.com/golang-jwt/jwt/v4 v4.4.2
 	github.com/google/uuid v1.3.0
+	github.com/hertz-contrib/cors v0.0.0-20220601061225-50f4e582beaf
 	github.com/pkg/errors v0.9.1
 	golang.org/x/crypto v0.0.0-20220926161630-eccd6366d1be
 	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c

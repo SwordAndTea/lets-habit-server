@@ -2,7 +2,7 @@ package dal
 
 import (
 	"github.com/pkg/errors"
-	"github.com/swordandtea/fhwh/biz/response"
+	"github.com/swordandtea/lets-habit-server/biz/response"
 	"gorm.io/gorm"
 	"time"
 )
@@ -64,16 +64,33 @@ func (l HabitPublicLevel) IsValid() bool {
 	}
 }
 
+type HabitCheckDeadlineDelay time.Duration
+
+const (
+	HabitCheckDeadlineDelayOneHour  = HabitCheckDeadlineDelay(time.Hour)
+	HabitCheckDeadlineDelayTwoHour  = HabitCheckDeadlineDelay(time.Hour * 2)
+	HabitCheckDeadlineDelayFourHour = HabitCheckDeadlineDelay(time.Hour * 4)
+)
+
+func (d HabitCheckDeadlineDelay) IsValid() bool {
+	switch d {
+	case HabitCheckDeadlineDelayOneHour, HabitCheckDeadlineDelayTwoHour, HabitCheckDeadlineDelayFourHour:
+		return true
+	default:
+		return false
+	}
+}
+
 // Habit the habit model to represent a habit
 type Habit struct {
-	ID                 uint64              `json:"id"`
-	Creator            UID                 `json:"creator"`
-	CreateAt           time.Time           `json:"create_at"`
-	Name               string              `json:"content"`
-	PublicLevel        HabitPublicLevel    `json:"public_level"`
-	CheckType          HabitCheckType      `json:"check_type"`
-	CheckFrequency     HabitCheckFrequency `json:"check_frequency"`
-	CheckDeadlineDelay time.Duration       `json:"check_deadline_delay"`
+	ID                 uint64                  `json:"id"`
+	Creator            UID                     `json:"creator"`
+	CreateAt           time.Time               `json:"create_at"`
+	Name               string                  `json:"content"`
+	PublicLevel        HabitPublicLevel        `json:"public_level"`
+	CheckType          HabitCheckType          `json:"check_type"`
+	CheckFrequency     HabitCheckFrequency     `json:"check_frequency"`
+	CheckDeadlineDelay HabitCheckDeadlineDelay `json:"check_deadline_delay"`
 }
 
 // habitDBHD the handler to operate the habit table
@@ -105,14 +122,22 @@ func (hd *habitDBHD) GetByID(db *gorm.DB, id uint64) (*Habit, response.SError) {
 }
 
 // ListUserJoinedHabits list all Habits one user joined
-func (hd *habitDBHD) ListUserJoinedHabits(db *gorm.DB, uid UID) ([]*Habit, response.SError) {
+func (hd *habitDBHD) ListUserJoinedHabits(db *gorm.DB, uid UID, pagination *Pagination) ([]*Habit, uint, response.SError) {
 	var hs []*Habit
+
 	subquery := db.Table("habit_group").Select("habit_id").Where("uid=?", uid)
-	err := db.Where("id in (?)", subquery).Find(&hs).Error
+	var count int64
+	err := db.Where("id in (?)", subquery).Count(&count).Error
 	if err != nil {
-		return nil, response.ErrroCode_InternalUnknownError.Wrap(err, "list user joined habits fail")
+		return nil, 0, response.ErrroCode_InternalUnknownError.Wrap(err, "list user joined habits fail")
 	}
-	return hs, nil
+
+	offset := (pagination.Page - 1) * pagination.PageSize
+	err = db.Where("id in (?)", subquery).Offset(int(offset)).Limit(int(pagination.PageSize)).Find(&hs).Error
+	if err != nil {
+		return nil, 0, response.ErrroCode_InternalUnknownError.Wrap(err, "list user joined habits fail")
+	}
+	return hs, uint(count), nil
 }
 
 // DeleteByID delete a Habit record from db by id

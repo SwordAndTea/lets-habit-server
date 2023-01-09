@@ -50,3 +50,20 @@ func (p *Password) Value() (driver.Value, error) {
 	}
 	return string(hashed), nil
 }
+
+// HashedValue return hashed value
+func (p *Password) HashedValue() string {
+	if p.Hashed {
+		return p.Data
+	}
+	hashed, err := bcrypt.GenerateFromPassword([]byte(p.Data), bcrypt.DefaultCost)
+	if err != nil {
+		return ""
+	}
+	return string(hashed)
+}
+
+type Pagination struct {
+	Page     uint
+	PageSize uint
+}
