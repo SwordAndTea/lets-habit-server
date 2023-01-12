@@ -12,6 +12,7 @@ import (
 	"github.com/swordandtea/lets-habit-server/biz/service"
 	"github.com/swordandtea/lets-habit-server/nullable"
 	"github.com/swordandtea/lets-habit-server/util"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"io"
 	"mime/multipart"
@@ -162,14 +163,14 @@ func (c *UserCtrl) sendEmailBindEmail(toMail string, uid dal.UID) response.SErro
 }
 
 // EmailRegister do email register, will send an email activate email to user
-func (c *UserCtrl) EmailRegister(email string, password *dal.Password) (dal.UID, response.SError) {
+func (c *UserCtrl) EmailRegister(email string, password *dal.Password) (*dal.User, response.SError) {
 	db := service.GetDBExecutor()
 	user, sErr := dal.UserDBHD.GetByEmail(db, email)
 	if sErr != nil {
-		return "", sErr
+		return nil, sErr
 	}
 	if user != nil {
-		return "", response.ErrorCode_UserNoPermission.New("email already registered")
+		return nil, response.ErrorCode_UserNoPermission.New("email already registered")
 	}
 
 	uid := dal.UID(uuid.New().String())
@@ -196,9 +197,9 @@ func (c *UserCtrl) EmailRegister(email string, password *dal.Password) (dal.UID,
 	})
 
 	if sErr != nil {
-		return "", sErr
+		return nil, sErr
 	}
-	return uid, nil
+	return user, nil
 }
 
 // CheckEmailActivated check whether user has activated account email
@@ -285,6 +286,7 @@ func (c *UserCtrl) EmailActivate(activateCode string) (*dal.User, string /*user 
 	if sErr != nil {
 		return nil, "", sErr
 	}
+	user.EmailActive.Set(true)
 	return user, tokenStr, nil
 }
 
@@ -340,15 +342,21 @@ func (c *UserCtrl) LoginByEmail(email string, password *dal.Password) (*dal.User
 		return nil, sErr
 	}
 	if user == nil {
-		return nil, response.ErrorCode_InvalidParam.New("email not registered or activated")
+		return nil, response.ErrorCode_InvalidParam.New("email not registered")
 	}
 	if user.Password == nil {
 		return nil, response.ErrorCode_InvalidParam.New("user has not set password yet")
 	}
-	if user.Password.HashedValue() != password.HashedValue() {
+	err := bcrypt.CompareHashAndPassword([]byte(user.Password.Data), []byte(password.Data))
+	if err != nil {
 		return nil, response.ErrorCode_InvalidParam.New("wrong password")
 	}
 	return user, nil
+}
+
+func (c *UserCtrl) GetUserByUID(uid dal.UID) (*dal.User, response.SError) {
+	db := service.GetDBExecutor()
+	return dal.UserDBHD.GetByUID(db, uid)
 }
 
 const PortraitSizeLimit = 10 * 1024 * 1024 // 10M

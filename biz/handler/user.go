@@ -6,7 +6,6 @@ import (
 	"github.com/swordandtea/lets-habit-server/biz/controller"
 	"github.com/swordandtea/lets-habit-server/biz/dal"
 	"github.com/swordandtea/lets-habit-server/biz/response"
-	"github.com/swordandtea/lets-habit-server/nullable"
 	"mime/multipart"
 )
 
@@ -16,6 +15,30 @@ type UserRouter struct {
 
 func NewUserRouter() *UserRouter {
 	return &UserRouter{Ctrl: &controller.UserCtrl{}}
+}
+
+/*********************** User Router User Auth Check ***********************/
+
+type GetUserInfoByAuthResponse struct {
+	User *dal.User `json:"user"`
+}
+
+func (r *UserRouter) GetUserInfoByAuth(ctx context.Context, rc *app.RequestContext) {
+	resp := response.NewHTTPResponse(rc)
+	defer resp.ReturnWithLog(ctx, rc)
+	uid := rc.GetString(UIDKey)
+	user, sErr := r.Ctrl.GetUserByUID(dal.UID(uid))
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+	userToken, sErr := GenerateUserToken(dal.UID(uid))
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+	rc.Response.Header.Set(UserTokenHeader, userToken)
+	resp.SetSuccessData(&GetUserInfoByAuthResponse{User: user})
 }
 
 /*********************** User Router User Register By Email Handler ***********************/
@@ -38,8 +61,7 @@ func (r *UserRegisterRequest) validate() response.SError {
 }
 
 type UserRegisterResponse struct {
-	UID       dal.UID `json:"uid"`
-	PollToken string  `json:"poll_token"`
+	User *dal.User `json:"user"`
 }
 
 func (r *UserRouter) RegisterByEmail(ctx context.Context, rc *app.RequestContext) {
@@ -59,19 +81,21 @@ func (r *UserRouter) RegisterByEmail(ctx context.Context, rc *app.RequestContext
 		return
 	}
 
-	uid, sErr := r.Ctrl.EmailRegister(req.Email, dal.NewRawPassword(req.Password))
+	user, sErr := r.Ctrl.EmailRegister(req.Email, dal.NewRawPassword(req.Password))
 	if sErr != nil {
 		resp.SetError(sErr)
 		return
 	}
-	pollToken, sErr := GeneratePollToken(uid)
+
+	userToken, sErr := GenerateUserToken(user.UID)
 	if sErr != nil {
 		resp.SetError(sErr)
 		return
 	}
+
+	rc.Response.Header.Set(UserTokenHeader, userToken)
 	resp.SetSuccessData(&UserRegisterResponse{
-		UID:       uid,
-		PollToken: pollToken,
+		User: user,
 	})
 }
 
@@ -113,28 +137,13 @@ func (r *UserRouter) CheckEmailActivated(ctx context.Context, rc *app.RequestCon
 
 /*********************** User Router User Register Resend Activate Email Handler ***********************/
 
-type ResendActivateEmailRequest struct {
-	PollToken string `json:"poll_token"`
-}
-
 func (r *UserRouter) ResendActivateEmail(ctx context.Context, rc *app.RequestContext) {
 	resp := response.NewHTTPResponse(rc)
 	defer resp.ReturnWithLog(ctx, rc)
 
-	req := &ResendActivateEmailRequest{}
-	err := rc.BindAndValidate(req)
-	if err != nil {
-		resp.SetError(BindAndValidateErr(err))
-		return
-	}
+	uid := rc.GetString(UIDKey)
 
-	uid, sErr := ExtractPollToken(req.PollToken)
-	if sErr != nil {
-		resp.SetError(sErr)
-		return
-	}
-
-	sErr = r.Ctrl.ResendActivateEmail(uid)
+	sErr := r.Ctrl.ResendActivateEmail(dal.UID(uid))
 	if sErr != nil {
 		resp.SetError(sErr)
 		return
@@ -275,9 +284,7 @@ func (r *UserLoginRequest) validate() response.SError {
 }
 
 type UserLoginResponse struct {
-	User      *dal.User           `json:"user"`
-	PollToken nullable.NullString `json:"poll_token"`
-	UserToken nullable.NullString `json:"user_token"`
+	User *dal.User `json:"user"`
 }
 
 func (r *UserRouter) LoginByEmail(ctx context.Context, rc *app.RequestContext) {
@@ -303,27 +310,14 @@ func (r *UserRouter) LoginByEmail(ctx context.Context, rc *app.RequestContext) {
 		return
 	}
 
-	pollToken := nullable.NullString{}
-	userToken := nullable.NullString{}
-	if user.UserRegisterType == dal.UserRegisterTypeEmail && !user.EmailActive.Get() {
-		pollTokenStr, sErr := GeneratePollToken(user.UID)
-		if sErr != nil {
-			resp.SetError(sErr)
-			return
-		}
-		pollToken.Set(pollTokenStr)
-	} else {
-		userTokenStr, sErr := GenerateUserToken(user.UID)
-		if sErr != nil {
-			resp.SetError(sErr)
-			return
-		}
-		userToken.Set(userTokenStr)
+	userTokenStr, sErr := GenerateUserToken(user.UID)
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
 	}
+	rc.Response.Header.Set(UserTokenHeader, userTokenStr)
 	resp.SetSuccessData(&UserLoginResponse{
-		User:      user,
-		PollToken: pollToken,
-		UserToken: userToken,
+		User: user,
 	})
 }
 

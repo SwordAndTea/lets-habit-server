@@ -34,7 +34,7 @@ func main() {
 	h.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://127.0.0.1:3000", "http://localhost:3000"},
 		AllowMethods:     []string{"GET", "PUT", "POST", "DELETE"},
-		AllowHeaders:     []string{"Origin", "Content-Type"},
+		AllowHeaders:     []string{"Origin", "Content-Type", handler.UserTokenHeader},
 		ExposeHeaders:    []string{"Content-Length", handler.UserTokenHeader},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,

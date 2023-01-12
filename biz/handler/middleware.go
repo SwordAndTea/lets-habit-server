@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/pkg/errors"
 	"github.com/swordandtea/lets-habit-server/biz/config"
 	"github.com/swordandtea/lets-habit-server/biz/response"
 )
@@ -28,6 +29,11 @@ func UserTokenVerify() app.HandlerFunc {
 		})
 
 		if err != nil {
+			if errors.Is(err, jwt.ErrTokenExpired) {
+				resp.SetError(response.ErrorCode_UserAuthFail.New("user token expired"))
+				resp.Abort(ctx, rc)
+				return
+			}
 			resp.SetError(response.ErrorCode_UserAuthFail.Wrap(err, "verify user token fail"))
 			resp.Abort(ctx, rc)
 			return

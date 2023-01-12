@@ -17,13 +17,14 @@ func customizedRegister(r *server.Hertz) {
 	// register user related api
 	userRouter := handler.NewUserRouter()
 	{
+		apiV1.GET("/user", handler.UserTokenVerify(), userRouter.GetUserInfoByAuth)
 		apiV1.POST("/user/register/email", userRouter.RegisterByEmail)
-		apiV1.GET("/user/register/email/activate/check", userRouter.CheckEmailActivated)
-		apiV1.POST("/user/register/email/activate/resend", userRouter.ResendActivateEmail)
+		//apiV1.GET("/user/register/email/activate/check", userRouter.CheckEmailActivated)
+		apiV1.POST("/user/register/email/activate/resend", handler.UserTokenVerify(), userRouter.ResendActivateEmail)
 		apiV1.POST("/user/register/email/activate", userRouter.ActivateEmail)
 		apiV1.POST("/user/login/email", userRouter.LoginByEmail)
 
-		apiV1.PUT("/user/base", userRouter.UpdateUserBaseInfo)
+		apiV1.PUT("/user/base", handler.UserTokenVerify(), userRouter.UpdateUserBaseInfo)
 
 		apiV1.POST("/user/email/bind", handler.UserTokenVerify(), userRouter.SubmitBindEmail)
 		apiV1.GET("/user/email/bind/confirm", userRouter.ConfirmBindEmail)
