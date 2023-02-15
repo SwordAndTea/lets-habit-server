@@ -367,3 +367,46 @@ func (r *UserRouter) UpdateUserBaseInfo(ctx context.Context, rc *app.RequestCont
 	}
 	resp.SetSuccessData(&UpdateUserBaseInfoResponse{User: user})
 }
+
+/*********************** User Router Update User Base Info Handler ***********************/
+
+type UserSearchRequest struct {
+	NameOrUID string `json:"name_or_uid"`
+}
+
+func (r *UserSearchRequest) validate() response.SError {
+	if r.NameOrUID == "" {
+		return response.ErrorCode_InvalidParam.New("empty search text")
+	}
+	return nil
+}
+
+type UserSearchResponse struct {
+	Users []*controller.SimplifiedUser `json:"users"`
+}
+
+func (r *UserRouter) UserSearch(ctx context.Context, rc *app.RequestContext) {
+	resp := response.NewHTTPResponse(rc)
+	defer resp.ReturnWithLog(ctx, rc)
+
+	req := &UserSearchRequest{}
+	err := rc.BindAndValidate(req)
+	if err != nil {
+		resp.SetError(BindAndValidateErr(err))
+		return
+	}
+
+	sErr := req.validate()
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+
+	users, sErr := r.Ctrl.SearchUserByNameOrUID(req.NameOrUID)
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+
+	resp.SetSuccessData(&UserSearchResponse{Users: users})
+}

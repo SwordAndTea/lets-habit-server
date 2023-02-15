@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/google/uuid"
+	"github.com/rs/xid"
 	"github.com/swordandtea/lets-habit-server/biz/config"
 	"github.com/swordandtea/lets-habit-server/biz/dal"
 	"github.com/swordandtea/lets-habit-server/biz/response"
@@ -173,7 +173,7 @@ func (c *UserCtrl) EmailRegister(email string, password *dal.Password) (*dal.Use
 		return nil, response.ErrorCode_UserNoPermission.New("email already registered")
 	}
 
-	uid := dal.UID(uuid.New().String())
+	uid := dal.UID(xid.New().String())
 
 	user = &dal.User{
 		UID:              uid,
@@ -275,7 +275,7 @@ func (c *UserCtrl) EmailActivate(activateCode string) (*dal.User, string /*user 
 		// gen user token
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, &jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(userTokenExpireTime)),
-			ID:        uuid.New().String(),
+			ID:        xid.New().String(),
 		})
 		tokenStr, err = token.SignedString([]byte(config.GlobalConfig.JWT.Cypher))
 		if err != nil {
@@ -356,7 +356,14 @@ func (c *UserCtrl) LoginByEmail(email string, password *dal.Password) (*dal.User
 
 func (c *UserCtrl) GetUserByUID(uid dal.UID) (*dal.User, response.SError) {
 	db := service.GetDBExecutor()
-	return dal.UserDBHD.GetByUID(db, uid)
+	user, sErr := dal.UserDBHD.GetByUID(db, uid)
+	if sErr != nil {
+		return nil, sErr
+	}
+	if user == nil {
+		return nil, response.ErrorCode_InvalidParam.New("invalid uid, not found")
+	}
+	return user, nil
 }
 
 const PortraitSizeLimit = 10 * 1024 * 1024 // 10M
@@ -425,4 +432,32 @@ func (c *UserCtrl) UpdateUserBaseInfo(uid dal.UID, updateFields *UpdateUserBaseI
 	}
 
 	return user, nil
+}
+
+type SimplifiedUser struct {
+	UID      dal.UID             `json:"uid"`
+	Name     nullable.NullString `json:"name"`
+	Portrait string              `json:"portrait"`
+}
+
+func (c *UserCtrl) SearchUserByNameOrUID(text string) ([]*SimplifiedUser, response.SError) {
+	db := service.GetDBExecutor()
+	users, sErr := dal.UserDBHD.SearchUserByNameOrUID(db, text, &dal.Pagination{
+		Page:     1,
+		PageSize: 10, // default only show ten people
+	})
+	if sErr != nil {
+		return nil, sErr
+	}
+
+	simplifiedUsers := make([]*SimplifiedUser, 0, len(users))
+	for _, user := range users {
+		simplifiedUsers = append(simplifiedUsers, &SimplifiedUser{
+			UID:      user.UID,
+			Name:     user.Name,
+			Portrait: user.PortraitURL,
+		})
+	}
+
+	return simplifiedUsers, nil
 }

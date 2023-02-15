@@ -20,10 +20,9 @@ const (
 type User struct {
 	ID               uint64              `json:"id"`
 	UID              UID                 `json:"uid"`
-	Name             nullable.NullString `json:"name" gorm:"omit"`
+	Name             nullable.NullString `json:"name"`
 	Email            nullable.NullString `json:"email"`
 	EmailActive      nullable.NullBool   `json:"email_active"`
-	EmailBind        nullable.NullBool   `json:"email_bind"`
 	Password         *Password           `json:"-"`
 	Portrait         nullable.NullString `json:"-"` //portrait object storage Key
 	PortraitURL      string              `json:"portrait" gorm:"-"`
@@ -133,4 +132,19 @@ func (hd *userDBHD) UpdateUser(db *gorm.DB, uid UID, updateFields *UserUpdatable
 		return response.ErrroCode_InternalUnknownError.Wrap(err, "update user fail")
 	}
 	return nil
+}
+
+func (hd *userDBHD) SearchUserByNameOrUID(db *gorm.DB, text string, pagination *Pagination) ([]*User, response.SError) {
+	var users []*User
+	offset := (pagination.Page - 1) * pagination.PageSize
+	queryText := "%" + text + "%"
+	err := db.Where("name Like ? or uid like ?", queryText, queryText).
+		Offset(int(offset)).Limit(int(pagination.PageSize)).
+		Find(&users).Error
+	if err != nil {
+		return nil, response.ErrroCode_InternalUnknownError.Wrap(err, "search user fail")
+	}
+
+	postProcessUserField(users)
+	return users, nil
 }
