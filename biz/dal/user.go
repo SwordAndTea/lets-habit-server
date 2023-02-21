@@ -4,7 +4,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/swordandtea/lets-habit-server/biz/response"
 	"github.com/swordandtea/lets-habit-server/biz/service"
-	"github.com/swordandtea/lets-habit-server/nullable"
 	"gorm.io/gorm"
 )
 
@@ -18,23 +17,23 @@ const (
 
 // User the user registered
 type User struct {
-	ID               uint64              `json:"id"`
-	UID              UID                 `json:"uid"`
-	Name             nullable.NullString `json:"name"`
-	Email            nullable.NullString `json:"email"`
-	EmailActive      nullable.NullBool   `json:"email_active"`
-	Password         *Password           `json:"-"`
-	Portrait         nullable.NullString `json:"-"` //portrait object storage Key
-	PortraitURL      string              `json:"portrait" gorm:"-"`
-	UserRegisterType UserRegisterType    `json:"user_register_type"`
+	ID               uint64           `json:"id"`
+	UID              UID              `json:"uid"`
+	Name             *string          `json:"name"`
+	Email            *string          `json:"email"`
+	EmailActive      bool             `json:"email_active"`
+	Password         *Password        `json:"-"`
+	Portrait         *string          `json:"-"` //portrait object storage Key
+	PortraitURL      string           `json:"portrait" gorm:"-"`
+	UserRegisterType UserRegisterType `json:"user_register_type"`
 }
 
 // postProcessUserField process some field after User data is fetched from db,
 // basically is some field related with time and url
 func postProcessUserField(users []*User) {
 	for _, u := range users {
-		if u.Portrait.NotNull() {
-			u.PortraitURL = service.GetObjectStorageExecutor().ObjectKeyToURL(u.Portrait.Get())
+		if u.Portrait != nil {
+			u.PortraitURL = service.GetObjectStorageExecutor().ObjectKeyToURL(*u.Portrait)
 		}
 	}
 }
@@ -96,8 +95,8 @@ func (hd *userDBHD) ListByUIDs(db *gorm.DB, uids []UID) ([]*User, response.SErro
 type UserUpdatableFields struct {
 	Name        string
 	Email       string
-	EmailActive nullable.NullBool
-	EmailBind   nullable.NullBool
+	EmailActive *bool
+	EmailBind   *bool
 	Password    *Password
 	Portrait    string
 }
@@ -111,11 +110,11 @@ func (hd *userDBHD) UpdateUser(db *gorm.DB, uid UID, updateFields *UserUpdatable
 	if updateFields.Email != "" {
 		updates["email"] = updateFields.Email
 	}
-	if updateFields.EmailActive.NotNull() {
-		updates["email_active"] = updateFields.EmailActive.Get()
+	if updateFields.EmailActive != nil {
+		updates["email_active"] = *updateFields.EmailActive
 	}
-	if updateFields.EmailBind.NotNull() {
-		updates["email_bind"] = updateFields.EmailBind.Get()
+	if updateFields.EmailBind != nil {
+		updates["email_bind"] = *updateFields.EmailBind
 	}
 	if updateFields.Password != nil {
 		updates["passport"] = updateFields.Password

@@ -38,7 +38,7 @@ func (hd *habitGroupDBHD) AddMulti(db *gorm.DB, hgs []*HabitGroup) response.SErr
 // ListByHabitID list HabitGroup by habit id
 func (hd *habitGroupDBHD) ListByHabitID(db *gorm.DB, habitID uint64) ([]*HabitGroup, response.SError) {
 	var hgs []*HabitGroup
-	err := db.Where("habit_id=?", habitID).Find(&hgs).Error
+	err := db.Model(&HabitGroup{}).Where("habit_id=?", habitID).Find(&hgs).Error
 	if err != nil {
 		return nil, response.ErrroCode_InternalUnknownError.Wrap(err, "list habit group by habit id fail")
 	}
@@ -48,7 +48,7 @@ func (hd *habitGroupDBHD) ListByHabitID(db *gorm.DB, habitID uint64) ([]*HabitGr
 // ListByHabitIDs list HabitGroup by a list of habit id
 func (hd *habitGroupDBHD) ListByHabitIDs(db *gorm.DB, habitIDs []uint64) ([]*HabitGroup, response.SError) {
 	var hgs []*HabitGroup
-	err := db.Where("habit_id in (?)", habitIDs).Find(&hgs).Error
+	err := db.Model(&HabitGroup{}).Where("habit_id in (?)", habitIDs).Find(&hgs).Error
 	if err != nil {
 		return nil, response.ErrroCode_InternalUnknownError.Wrap(err, "list habit group by habit ids fail")
 	}
@@ -58,7 +58,7 @@ func (hd *habitGroupDBHD) ListByHabitIDs(db *gorm.DB, habitIDs []uint64) ([]*Hab
 // ListByUID list HabitGroup by user id
 func (hd *habitGroupDBHD) ListByUID(db *gorm.DB, uid UID) ([]*HabitGroup, response.SError) {
 	var hgs []*HabitGroup
-	err := db.Where("uid=?", uid).Find(&hgs).Error
+	err := db.Model(&HabitGroup{}).Where("uid=?", uid).Find(&hgs).Error
 	if err != nil {
 		return nil, response.ErrroCode_InternalUnknownError.Wrap(err, "list habit group by uid fail")
 	}

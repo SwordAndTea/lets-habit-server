@@ -31,6 +31,7 @@ func main() {
 	Init()
 
 	h := server.Default()
+	// TODO: change allow origins by run env
 	h.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://127.0.0.1:3000", "http://localhost:3000"},
 		AllowMethods:     []string{"GET", "PUT", "POST", "DELETE"},

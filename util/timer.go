@@ -34,3 +34,12 @@ func (timer *Timer) ElapsedUInt64() uint64 {
 func (timer *Timer) Duration() time.Duration {
 	return time.Since(timer.startTime)
 }
+
+func GetTimeStringInLocation(t *time.Time, l *time.Location) string {
+	return t.In(l).Format("2006-01-02 15:04:05")
+}
+
+func GetCNTimeString(t *time.Time) string {
+	location, _ := time.LoadLocation("Asia/Chongqing")
+	return GetTimeStringInLocation(t, location)
+}

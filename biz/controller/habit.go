@@ -10,14 +10,19 @@ import (
 
 type HabitCtrl struct{}
 
+type HabitCustomConfig struct {
+	HeatmapColor string `json:"heatmap_color"`
+}
+
 // DetailedHabit a struct to represent a habit and its group user
 type DetailedHabit struct {
-	Habit     *dal.Habit `json:"habit"`
-	UserGroup []*dal.User
+	Habit           *dal.Habit           `json:"habit"`
+	UserHabitConfig *dal.UserHabitConfig `json:"user_custom_config"`
+	UserGroup       []*dal.User          `json:"user_group"`
 }
 
 // AddHabit add a habit and its group user info
-func (c *HabitCtrl) AddHabit(habit *dal.Habit, creator dal.UID, uids []dal.UID) (*DetailedHabit, response.SError) {
+func (c *HabitCtrl) AddHabit(habit *dal.Habit, creator dal.UID, uids []dal.UID, customConfig *HabitCustomConfig) (*DetailedHabit, response.SError) {
 	var sErr response.SError
 	var users []*dal.User
 	sErr = WithDBTx(func(tx *gorm.DB) response.SError {
@@ -52,13 +57,37 @@ func (c *HabitCtrl) AddHabit(habit *dal.Habit, creator dal.UID, uids []dal.UID) 
 		if sErr != nil {
 			return sErr
 		}
+
+		uhc := &dal.UserHabitConfig{
+			UID:           creator,
+			HabitID:       habit.ID,
+			CurrentStreak: 0,
+			LongestStreak: 0,
+			HeatmapColor:  customConfig.HeatmapColor,
+		}
+
+		sErr = dal.UserHabitConfigDBHD.Add(tx, uhc)
+		if sErr != nil {
+			return sErr
+		}
+
 		return nil
 	})
 	if sErr != nil {
 		return nil, sErr
 	}
 
-	return &DetailedHabit{Habit: habit, UserGroup: users}, nil
+	return &DetailedHabit{
+		Habit: habit,
+		UserHabitConfig: &dal.UserHabitConfig{
+			UID:           creator,
+			HabitID:       habit.ID,
+			CurrentStreak: 0,
+			LongestStreak: 0,
+			HeatmapColor:  customConfig.HeatmapColor,
+		},
+		UserGroup: users,
+	}, nil
 }
 
 // GetHabitByID get a habit and its group info by habit id,
@@ -79,16 +108,9 @@ func (c *HabitCtrl) GetHabitByID(id uint64, uid dal.UID) (*DetailedHabit, respon
 	}
 
 	// check current is in group or not
-	inGroup := false
 	uids := make([]dal.UID, 0, len(hgs))
 	for _, hg := range hgs {
-		if hg.UID == uid {
-			inGroup = true
-		}
 		uids = append(uids, hg.UID)
-	}
-	if habit.PublicLevel == dal.HabitPublicLevelPrivate && !inGroup {
-		return nil, response.ErrorCode_UserNoPermission.New("habit is private")
 	}
 
 	users, sErr := dal.UserDBHD.ListByUIDs(db, uids)
@@ -113,52 +135,23 @@ func (c *HabitCtrl) ListHabitsByUID(uid dal.UID, pagination *dal.Pagination) ([]
 		hsIDs = append(hsIDs, h.ID)
 	}
 
-	// get habit group info for all the habits above
-	hgs, sErr := dal.HabitGroupDBHD.ListByHabitIDs(db, hsIDs)
+	// get user habit config
+	uhcs, sErr := dal.UserHabitConfigDBHD.ListUserHabitConfig(db, uid, hsIDs)
 	if sErr != nil {
 		return nil, 0, sErr
 	}
 
-	// get distinct uid and get the relation of habit with its all joined user
-	uidMap := make(map[dal.UID]struct{})
-	uidList := make([]dal.UID, 0, len(hgs))
-	habitUserMap := make(map[uint64][]dal.UID)
-	var exit bool
-	for _, hg := range hgs {
-		_, exit = uidMap[hg.UID]
-		if !exit {
-			uidMap[hg.UID] = struct{}{}
-			uidList = append(uidList, hg.UID)
-		}
-		habitUserList, ok := habitUserMap[hg.HabitID]
-		if !ok {
-			habitUserList = make([]dal.UID, 0, 8)
-		}
-		habitUserList = append(habitUserList, hg.UID)
-		habitUserMap[hg.HabitID] = habitUserList
-	}
-
-	// get users and map users by its uid
-	users, sErr := dal.UserDBHD.ListByUIDs(db, uidList)
-	if sErr != nil {
-		return nil, 0, sErr
-	}
-	userIDUserMap := make(map[dal.UID]*dal.User)
-	for _, u := range users {
-		userIDUserMap[u.UID] = u
+	habitIDUserHabitConfigMap := make(map[uint64]*dal.UserHabitConfig)
+	for _, uhc := range uhcs {
+		habitIDUserHabitConfigMap[uhc.HabitID] = uhc
 	}
 
 	// construct return info
 	detailedHabits := make([]*DetailedHabit, 0, len(hs))
 	for _, h := range hs {
-		habitUserList := habitUserMap[h.ID]
-		habitUsers := make([]*dal.User, 0, len(habitUserList))
-		for _, u := range habitUserList {
-			habitUsers = append(habitUsers, userIDUserMap[u])
-		}
 		detailedHabits = append(detailedHabits, &DetailedHabit{
-			Habit:     h,
-			UserGroup: habitUsers,
+			Habit:           h,
+			UserHabitConfig: habitIDUserHabitConfigMap[h.ID],
 		})
 	}
 	return detailedHabits, total, nil

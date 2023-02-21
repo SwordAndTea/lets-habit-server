@@ -10,7 +10,6 @@ import (
 	"github.com/swordandtea/lets-habit-server/biz/dal"
 	"github.com/swordandtea/lets-habit-server/biz/response"
 	"github.com/swordandtea/lets-habit-server/biz/service"
-	"github.com/swordandtea/lets-habit-server/nullable"
 	"github.com/swordandtea/lets-habit-server/util"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -177,8 +176,8 @@ func (c *UserCtrl) EmailRegister(email string, password *dal.Password) (*dal.Use
 
 	user = &dal.User{
 		UID:              uid,
-		Email:            nullable.MakeNullString(email),
-		EmailActive:      nullable.MakeNullBool(false),
+		Email:            &email,
+		EmailActive:      false,
 		Password:         password,
 		UserRegisterType: dal.UserRegisterTypeEmail,
 	}
@@ -203,17 +202,17 @@ func (c *UserCtrl) EmailRegister(email string, password *dal.Password) (*dal.Use
 }
 
 // CheckEmailActivated check whether user has activated account email
-func (c *UserCtrl) CheckEmailActivated(uid dal.UID) (bool, response.SError) {
-	db := service.GetDBExecutor()
-	user, sErr := dal.UserDBHD.GetByUID(db, uid)
-	if sErr != nil {
-		return false, sErr
-	}
-	if user == nil {
-		return false, response.ErrorCode_InvalidParam.New("invalid uid")
-	}
-	return user.EmailActive.Get(), nil
-}
+//func (c *UserCtrl) CheckEmailActivated(uid dal.UID) (bool, response.SError) {
+//	db := service.GetDBExecutor()
+//	user, sErr := dal.UserDBHD.GetByUID(db, uid)
+//	if sErr != nil {
+//		return false, sErr
+//	}
+//	if user == nil {
+//		return false, response.ErrorCode_InvalidParam.New("invalid uid")
+//	}
+//	return user.EmailActive, nil
+//}
 
 func (c *UserCtrl) ResendActivateEmail(uid dal.UID) response.SError {
 	db := service.GetDBExecutor()
@@ -226,7 +225,7 @@ func (c *UserCtrl) ResendActivateEmail(uid dal.UID) response.SError {
 		return response.ErrorCode_InvalidParam.New("user not registered")
 	}
 
-	if user.EmailActive.Get() { // email already activated
+	if user.EmailActive { // email already activated
 		return response.ErrorCode_UserNoPermission.New("email already activated")
 	}
 
@@ -234,7 +233,7 @@ func (c *UserCtrl) ResendActivateEmail(uid dal.UID) response.SError {
 		return response.ErrorCode_UserNoPermission.New("user not registered by email")
 	}
 
-	sErr = c.sendActivateEmail(user.Email.Get(), user.UID)
+	sErr = c.sendActivateEmail(*user.Email, user.UID)
 	if sErr != nil {
 		return sErr
 	}
@@ -260,7 +259,7 @@ func (c *UserCtrl) EmailActivate(activateCode string) (*dal.User, string /*user 
 	if user == nil {
 		return nil, "", response.ErrorCode_InvalidParam.Wrap(err, "invalid activate code, no user found")
 	}
-	if user.EmailActive.Get() {
+	if user.EmailActive {
 		return nil, "", response.ErrorCode_UserNoPermission.Wrap(err, "email already activated")
 	}
 
@@ -268,7 +267,7 @@ func (c *UserCtrl) EmailActivate(activateCode string) (*dal.User, string /*user 
 	var tokenStr string
 	sErr = WithDBTx(func(tx *gorm.DB) response.SError {
 		// mark user email activated
-		sErr = dal.UserDBHD.UpdateUser(tx, uid, &dal.UserUpdatableFields{EmailActive: nullable.MakeNullBool(true)})
+		sErr = dal.UserDBHD.UpdateUser(tx, uid, &dal.UserUpdatableFields{EmailActive: util.BoolPtr(true)})
 		if sErr != nil {
 			return sErr
 		}
@@ -286,7 +285,7 @@ func (c *UserCtrl) EmailActivate(activateCode string) (*dal.User, string /*user 
 	if sErr != nil {
 		return nil, "", sErr
 	}
-	user.EmailActive.Set(true)
+	user.EmailActive = true
 	return user, tokenStr, nil
 }
 
@@ -302,7 +301,7 @@ func (c *UserCtrl) StartEmailBinding(uid dal.UID, email string) response.SError 
 		return response.ErrorCode_InvalidParam.New("no user found")
 	}
 
-	if user.Email.Get() == email {
+	if user.Email != nil && *user.Email == email {
 		return response.ErrorCode_InvalidParam.New("same email with the email already bond")
 	}
 
@@ -387,7 +386,7 @@ func (c *UserCtrl) UpdateUserBaseInfo(uid dal.UID, updateFields *UpdateUserBaseI
 	updates := &dal.UserUpdatableFields{}
 	if updateFields.Name != "" {
 		updates.Name = updateFields.Name
-		user.Name = nullable.MakeNullString(updateFields.Name)
+		user.Name = &updateFields.Name
 	}
 
 	var portraitData []byte
@@ -409,7 +408,7 @@ func (c *UserCtrl) UpdateUserBaseInfo(uid dal.UID, updateFields *UpdateUserBaseI
 			return nil, response.ErrorCode_InvalidParam.Wrap(err, "unsupported image format type")
 		}
 		updates.Portrait = fmt.Sprintf("portrait/%s.%s", uid, imageFormat)
-		user.Portrait = nullable.MakeNullString(updates.Portrait)
+		user.Portrait = &updates.Portrait
 		user.PortraitURL = service.GetObjectStorageExecutor().ObjectKeyToURL(updates.Portrait)
 	}
 
@@ -435,9 +434,9 @@ func (c *UserCtrl) UpdateUserBaseInfo(uid dal.UID, updateFields *UpdateUserBaseI
 }
 
 type SimplifiedUser struct {
-	UID      dal.UID             `json:"uid"`
-	Name     nullable.NullString `json:"name"`
-	Portrait string              `json:"portrait"`
+	UID      dal.UID `json:"uid"`
+	Name     *string `json:"name"`
+	Portrait string  `json:"portrait"`
 }
 
 func (c *UserCtrl) SearchUserByNameOrUID(text string) ([]*SimplifiedUser, response.SError) {

@@ -3,6 +3,7 @@ package dal
 import (
 	"github.com/pkg/errors"
 	"github.com/swordandtea/lets-habit-server/biz/response"
+	"github.com/swordandtea/lets-habit-server/util"
 	"gorm.io/gorm"
 	"time"
 )
@@ -31,14 +32,13 @@ func (t HabitCheckType) IsValid() bool {
 type HabitCheckFrequency string
 
 const (
-	HabitCheckFrequencyDaily   HabitCheckFrequency = "daily"
-	HabitCheckFrequencyWeekly  HabitCheckFrequency = "weekly"
-	HabitCheckFrequencyMonthly HabitCheckFrequency = "monthly"
+	HabitCheckFrequencyDaily  HabitCheckFrequency = "daily"
+	HabitCheckFrequencyWeekly HabitCheckFrequency = "weekly"
 )
 
 func (f HabitCheckFrequency) IsValid() bool {
 	switch f {
-	case HabitCheckFrequencyDaily, HabitCheckFrequencyWeekly, HabitCheckFrequencyMonthly:
+	case HabitCheckFrequencyDaily, HabitCheckFrequencyWeekly:
 		return true
 	default:
 		return false
@@ -64,33 +64,50 @@ func (l HabitPublicLevel) IsValid() bool {
 	}
 }
 
-type HabitCheckDeadlineDelay time.Duration
+type HabitCheckDeadlineDelay uint
 
 const (
-	HabitCheckDeadlineDelayOneHour  = HabitCheckDeadlineDelay(time.Hour)
-	HabitCheckDeadlineDelayTwoHour  = HabitCheckDeadlineDelay(time.Hour * 2)
-	HabitCheckDeadlineDelayFourHour = HabitCheckDeadlineDelay(time.Hour * 4)
+	HabitCheckDeadlineDelayNone     HabitCheckDeadlineDelay = 0
+	HabitCheckDeadlineDelayFourHour HabitCheckDeadlineDelay = 4
 )
 
 func (d HabitCheckDeadlineDelay) IsValid() bool {
 	switch d {
-	case HabitCheckDeadlineDelayOneHour, HabitCheckDeadlineDelayTwoHour, HabitCheckDeadlineDelayFourHour:
+	case HabitCheckDeadlineDelayNone, HabitCheckDeadlineDelayFourHour:
 		return true
 	default:
 		return false
 	}
 }
 
+type CheckDay uint8
+
+const (
+	CheckDayMonday CheckDay = 1 << iota
+	CheckDayTuesday
+	CheckDayWednesday
+	CheckDayThursday
+	CheckDayFriday
+	CheckDaySaturday
+	CheckDaySunday
+	CheckDayAll = CheckDayMonday | CheckDayTuesday | CheckDayWednesday | CheckDayThursday |
+		CheckDayFriday | CheckDaySaturday | CheckDaySunday
+)
+
+func (c CheckDay) IsValid() bool {
+	return c > 0 && c <= CheckDayAll
+}
+
 // Habit the habit model to represent a habit
 type Habit struct {
 	ID                 uint64                  `json:"id"`
-	Creator            UID                     `json:"creator"`
-	CreateAt           time.Time               `json:"create_at"`
 	Name               string                  `json:"content"`
-	PublicLevel        HabitPublicLevel        `json:"public_level"`
-	CheckType          HabitCheckType          `json:"check_type"`
-	CheckFrequency     HabitCheckFrequency     `json:"check_frequency"`
+	IdentityToForm     *string                 `json:"identity_to_form"`
 	CheckDeadlineDelay HabitCheckDeadlineDelay `json:"check_deadline_delay"`
+	CheckDays          CheckDay                `json:"check_days"`
+	Creator            UID                     `json:"creator"`
+	CreateAt           time.Time               `json:"-"`
+	CreateAtTimeStamp  string                  `json:"create_at" gorm:"-"`
 }
 
 // habitDBHD the handler to operate the habit table
@@ -99,25 +116,33 @@ type habitDBHD struct{}
 // HabitDBHD the default habitDBHD
 var HabitDBHD = &habitDBHD{}
 
+func postProcessHabitField(habits []*Habit) {
+	for _, h := range habits {
+		h.CreateAtTimeStamp = util.GetCNTimeString(&h.CreateAt)
+	}
+}
+
 // Add insert a Habit record into db
 func (hd *habitDBHD) Add(db *gorm.DB, h *Habit) response.SError {
 	err := db.Create(h).Error
 	if err != nil {
 		return response.ErrroCode_InternalUnknownError.Wrap(err, "add one habit fail")
 	}
+	postProcessHabitField([]*Habit{h})
 	return nil
 }
 
 // GetByID get ad Habit by id
 func (hd *habitDBHD) GetByID(db *gorm.DB, id uint64) (*Habit, response.SError) {
 	var h *Habit
-	err := db.Where("id=?", id).First(&h).Error
+	err := db.Model(&Habit{}).Where("id=?", id).First(&h).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
 		return nil, response.ErrroCode_InternalUnknownError.Wrap(err, "get habit by id fail")
 	}
+	postProcessHabitField([]*Habit{h})
 	return h, nil
 }
 
@@ -125,24 +150,25 @@ func (hd *habitDBHD) GetByID(db *gorm.DB, id uint64) (*Habit, response.SError) {
 func (hd *habitDBHD) ListUserJoinedHabits(db *gorm.DB, uid UID, pagination *Pagination) ([]*Habit, uint, response.SError) {
 	var hs []*Habit
 
-	subquery := db.Table("habit_group").Select("habit_id").Where("uid=?", uid)
+	subquery := db.Model(&HabitGroup{}).Select("habit_id").Where("uid=?", uid)
 	var count int64
-	err := db.Where("id in (?)", subquery).Count(&count).Error
+	err := db.Model(&Habit{}).Where("id in (?)", subquery).Count(&count).Error
 	if err != nil {
 		return nil, 0, response.ErrroCode_InternalUnknownError.Wrap(err, "list user joined habits fail")
 	}
 
 	offset := (pagination.Page - 1) * pagination.PageSize
-	err = db.Where("id in (?)", subquery).Offset(int(offset)).Limit(int(pagination.PageSize)).Find(&hs).Error
+	err = db.Model(&Habit{}).Where("id in (?)", subquery).Offset(int(offset)).Limit(int(pagination.PageSize)).Find(&hs).Error
 	if err != nil {
 		return nil, 0, response.ErrroCode_InternalUnknownError.Wrap(err, "list user joined habits fail")
 	}
+	postProcessHabitField(hs)
 	return hs, uint(count), nil
 }
 
 // DeleteByID delete a Habit record from db by id
 func (hd *habitDBHD) DeleteByID(db *gorm.DB, id uint64) response.SError {
-	err := db.Where("id=?", id).Delete(&Habit{}).Error
+	err := db.Model(&Habit{}).Where("id=?", id).Delete(&Habit{}).Error
 	if err != nil {
 		return response.ErrroCode_InternalUnknownError.Wrap(err, "delete habit fail")
 	}

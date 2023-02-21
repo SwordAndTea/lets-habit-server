@@ -35,6 +35,7 @@ func customizedRegister(r *server.Hertz) {
 	// register habit related api
 	habitRouter := handler.NewHabitRouter()
 	{
-		apiV1.POST("/habit", habitRouter.CreateHabit)
+		apiV1.POST("/habit", handler.UserTokenVerify(), habitRouter.CreateHabit)
+		apiV1.GET("/habit", handler.UserTokenVerify(), habitRouter.ListHabits)
 	}
 }

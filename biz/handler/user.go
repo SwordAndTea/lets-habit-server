@@ -101,39 +101,39 @@ func (r *UserRouter) RegisterByEmail(ctx context.Context, rc *app.RequestContext
 
 /*********************** User Router User Register Activate Email Check Handler ***********************/
 
-type EmailActivatedCheckRequest struct {
-	PollToken string `query:"poll_token"`
-}
-
-type EmailActivateCheckResponse struct {
-	Activated bool `json:"activated"`
-}
-
-func (r *UserRouter) CheckEmailActivated(ctx context.Context, rc *app.RequestContext) {
-	resp := response.NewHTTPResponse(rc)
-	defer resp.ReturnWithLog(ctx, rc)
-
-	req := &EmailActivatedCheckRequest{}
-	err := rc.BindAndValidate(req)
-	if err != nil {
-		resp.SetError(BindAndValidateErr(err))
-		return
-	}
-
-	uid, sErr := ExtractPollToken(req.PollToken)
-	if sErr != nil {
-		resp.SetError(sErr)
-		return
-	}
-
-	activated, sErr := r.Ctrl.CheckEmailActivated(uid)
-	if sErr != nil {
-		resp.SetError(sErr)
-		return
-	}
-
-	resp.SetSuccessData(&EmailActivateCheckResponse{Activated: activated})
-}
+//type EmailActivatedCheckRequest struct {
+//	PollToken string `query:"poll_token"`
+//}
+//
+//type EmailActivateCheckResponse struct {
+//	Activated bool `json:"activated"`
+//}
+//
+//func (r *UserRouter) CheckEmailActivated(ctx context.Context, rc *app.RequestContext) {
+//	resp := response.NewHTTPResponse(rc)
+//	defer resp.ReturnWithLog(ctx, rc)
+//
+//	req := &EmailActivatedCheckRequest{}
+//	err := rc.BindAndValidate(req)
+//	if err != nil {
+//		resp.SetError(BindAndValidateErr(err))
+//		return
+//	}
+//
+//	uid, sErr := ExtractPollToken(req.PollToken)
+//	if sErr != nil {
+//		resp.SetError(sErr)
+//		return
+//	}
+//
+//	activated, sErr := r.Ctrl.CheckEmailActivated(uid)
+//	if sErr != nil {
+//		resp.SetError(sErr)
+//		return
+//	}
+//
+//	resp.SetSuccessData(&EmailActivateCheckResponse{Activated: activated})
+//}
 
 /*********************** User Router User Register Resend Activate Email Handler ***********************/
 

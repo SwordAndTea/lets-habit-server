@@ -20,29 +20,20 @@ func NewHabitRouter() *HabitRouter {
 /*********************** Habit Router Create Habit Handler ***********************/
 
 type CreateHabitRequest struct {
-	Name               string                      `json:"name"`
-	PublicLevel        dal.HabitPublicLevel        `json:"public_level"`
-	CheckType          dal.HabitCheckType          `json:"check_type"`
-	CheckFrequency     dal.HabitCheckFrequency     `json:"check_frequency"`
-	CheckDeadlineDelay dal.HabitCheckDeadlineDelay `json:"check_deadline_delay"`
-	Cooperators        []dal.UID                   `json:"cooperators"`
+	Name         string                        `json:"name"`
+	Identity     *string                       `json:"identity"`
+	Cooperators  []dal.UID                     `json:"cooperators"`
+	CheckDays    dal.CheckDay                  `json:"check_days"`
+	CustomConfig *controller.HabitCustomConfig `json:"custom_config"`
 }
 
 func (r *CreateHabitRequest) validate() response.SError {
 	if r.Name == "" {
 		return response.ErrorCode_InvalidParam.New("invalid name")
 	}
-	if !r.PublicLevel.IsValid() {
-		return response.ErrorCode_InvalidParam.New("invalid public level")
-	}
-	if !r.CheckType.IsValid() {
-		return response.ErrorCode_InvalidParam.New("invalid check type")
-	}
-	if !r.CheckFrequency.IsValid() {
-		return response.ErrorCode_InvalidParam.New("invalid check frequency")
-	}
-	if !r.CheckDeadlineDelay.IsValid() {
-		return response.ErrorCode_InvalidParam.New("invalid check deadline delay")
+
+	if !r.CheckDays.IsValid() {
+		return response.ErrorCode_InvalidParam.New("invalid check days")
 	}
 
 	return nil
@@ -72,13 +63,12 @@ func (r *HabitRouter) CreateHabit(ctx context.Context, rc *app.RequestContext) {
 	uid := rc.GetString(UIDKey)
 	habit := &dal.Habit{
 		Name:               req.Name,
-		PublicLevel:        req.PublicLevel,
-		CheckType:          req.CheckType,
-		CheckFrequency:     req.CheckFrequency,
-		CheckDeadlineDelay: req.CheckDeadlineDelay,
+		IdentityToForm:     req.Identity,
+		CheckDeadlineDelay: dal.HabitCheckDeadlineDelayFourHour, // default to four hours
+		CheckDays:          req.CheckDays,
 	}
 
-	detailHabits, sErr := r.Ctrl.AddHabit(habit, dal.UID(uid), req.Cooperators)
+	detailHabits, sErr := r.Ctrl.AddHabit(habit, dal.UID(uid), req.Cooperators, req.CustomConfig)
 	if sErr != nil {
 		resp.SetError(sErr)
 		return
