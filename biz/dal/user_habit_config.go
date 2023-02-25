@@ -6,11 +6,12 @@ import (
 )
 
 type UserHabitConfig struct {
-	UID           UID    `json:"uid"`
-	HabitID       uint64 `json:"habit_id"`
-	CurrentStreak uint32 `json:"current_streak"`
-	LongestStreak uint32 `json:"longest_streak"`
-	HeatmapColor  string `json:"heatmap_color"`
+	UID                 UID    `json:"uid"`
+	HabitID             uint64 `json:"habit_id"`
+	CurrentStreak       uint32 `json:"current_streak"`
+	LongestStreak       uint32 `json:"longest_streak"`
+	RemainRecheckChance uint8  `json:"remain_recheck_chance"`
+	HeatmapColor        string `json:"heatmap_color"`
 }
 
 type userHabitConfigDBHD struct{}

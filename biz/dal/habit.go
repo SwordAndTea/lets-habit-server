@@ -3,7 +3,6 @@ package dal
 import (
 	"github.com/pkg/errors"
 	"github.com/swordandtea/lets-habit-server/biz/response"
-	"github.com/swordandtea/lets-habit-server/util"
 	"gorm.io/gorm"
 	"time"
 )
@@ -101,13 +100,12 @@ func (c CheckDay) IsValid() bool {
 // Habit the habit model to represent a habit
 type Habit struct {
 	ID                 uint64                  `json:"id"`
-	Name               string                  `json:"content"`
+	Name               string                  `json:"name"`
 	IdentityToForm     *string                 `json:"identity_to_form"`
 	CheckDeadlineDelay HabitCheckDeadlineDelay `json:"check_deadline_delay"`
 	CheckDays          CheckDay                `json:"check_days"`
 	Creator            UID                     `json:"creator"`
-	CreateAt           time.Time               `json:"-"`
-	CreateAtTimeStamp  string                  `json:"create_at" gorm:"-"`
+	CreateAt           time.Time               `json:"create_at"`
 }
 
 // habitDBHD the handler to operate the habit table
@@ -116,19 +114,12 @@ type habitDBHD struct{}
 // HabitDBHD the default habitDBHD
 var HabitDBHD = &habitDBHD{}
 
-func postProcessHabitField(habits []*Habit) {
-	for _, h := range habits {
-		h.CreateAtTimeStamp = util.GetCNTimeString(&h.CreateAt)
-	}
-}
-
 // Add insert a Habit record into db
 func (hd *habitDBHD) Add(db *gorm.DB, h *Habit) response.SError {
 	err := db.Create(h).Error
 	if err != nil {
 		return response.ErrroCode_InternalUnknownError.Wrap(err, "add one habit fail")
 	}
-	postProcessHabitField([]*Habit{h})
 	return nil
 }
 
@@ -142,7 +133,6 @@ func (hd *habitDBHD) GetByID(db *gorm.DB, id uint64) (*Habit, response.SError) {
 		}
 		return nil, response.ErrroCode_InternalUnknownError.Wrap(err, "get habit by id fail")
 	}
-	postProcessHabitField([]*Habit{h})
 	return h, nil
 }
 
@@ -162,7 +152,6 @@ func (hd *habitDBHD) ListUserJoinedHabits(db *gorm.DB, uid UID, pagination *Pagi
 	if err != nil {
 		return nil, 0, response.ErrroCode_InternalUnknownError.Wrap(err, "list user joined habits fail")
 	}
-	postProcessHabitField(hs)
 	return hs, uint(count), nil
 }
 

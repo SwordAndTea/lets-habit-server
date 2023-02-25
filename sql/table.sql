@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS `user_habit_configs` (
     `habit_id` bigint unsigned NOT NULL COMMENT 'habit primary key id',
     `current_streak` int unsigned NOT NULL COMMENT 'current consecutive record days',
     `longest_streak` int unsigned NOT NULL COMMENT 'longest consecutive record days',
+    `remain_recheck_chance` tinyint unsigned NOT NULL COMMENT 'remain recheck change',
     `heatmap_color` varchar(8) NOT NULL COMMENT 'heatmap hex rgb color',
     PRIMARY KEY (`habit_id`, `uid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='user habit config info';
@@ -45,5 +46,8 @@ CREATE TABLE IF NOT EXISTS `habit_check_records` (
     `habit_id` bigint unsigned NOT NULL COMMENT 'habit primary key id',
     `uid` varchar(32) NOT NULL COMMENT 'user id',
     `check_at` datetime NOT NULL COMMENT 'check time',
-    PRIMARY KEY (`id`)
+    PRIMARY KEY (`id`),
+    index idx_habit_id(`habit_id`),
+    index idx_uid(`uid`),
+    index idx_check_time(`check_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='user habit check record';

@@ -16,9 +16,10 @@ type HabitCustomConfig struct {
 
 // DetailedHabit a struct to represent a habit and its group user
 type DetailedHabit struct {
-	Habit           *dal.Habit           `json:"habit"`
-	UserHabitConfig *dal.UserHabitConfig `json:"user_custom_config"`
-	UserGroup       []*dal.User          `json:"user_group"`
+	Habit           *dal.Habit              `json:"habit"`
+	UserHabitConfig *dal.UserHabitConfig    `json:"user_custom_config"`
+	UserGroup       []*dal.User             `json:"user_group"`
+	CheckRecords    []*dal.HabitCheckRecord `json:"check_records"`
 }
 
 // AddHabit add a habit and its group user info
@@ -59,11 +60,12 @@ func (c *HabitCtrl) AddHabit(habit *dal.Habit, creator dal.UID, uids []dal.UID, 
 		}
 
 		uhc := &dal.UserHabitConfig{
-			UID:           creator,
-			HabitID:       habit.ID,
-			CurrentStreak: 0,
-			LongestStreak: 0,
-			HeatmapColor:  customConfig.HeatmapColor,
+			UID:                 creator,
+			HabitID:             habit.ID,
+			CurrentStreak:       0,
+			LongestStreak:       0,
+			RemainRecheckChance: 0,
+			HeatmapColor:        customConfig.HeatmapColor,
 		}
 
 		sErr = dal.UserHabitConfigDBHD.Add(tx, uhc)
@@ -121,8 +123,8 @@ func (c *HabitCtrl) GetHabitByID(id uint64, uid dal.UID) (*DetailedHabit, respon
 	return &DetailedHabit{Habit: habit, UserGroup: users}, nil
 }
 
-// ListHabitsByUID func get all the habit the user joined
-func (c *HabitCtrl) ListHabitsByUID(uid dal.UID, pagination *dal.Pagination) ([]*DetailedHabit, uint, response.SError) {
+// ListHabitsByUID get all the habit the user joined
+func (c *HabitCtrl) ListHabitsByUID(uid dal.UID, pagination *dal.Pagination, fromTime *time.Time, toTime *time.Time) ([]*DetailedHabit, uint, response.SError) {
 	db := service.GetDBExecutor()
 
 	// get user joined habits
@@ -146,12 +148,28 @@ func (c *HabitCtrl) ListHabitsByUID(uid dal.UID, pagination *dal.Pagination) ([]
 		habitIDUserHabitConfigMap[uhc.HabitID] = uhc
 	}
 
+	// get user habit check record
+	hcrs, sErr := dal.HabitCheckRecordDBHD.ListByUIDHabitIDs(db, uid, hsIDs, fromTime, toTime)
+	if sErr != nil {
+		return nil, 0, sErr
+	}
+	habitIDHCRMap := make(map[uint64][]*dal.HabitCheckRecord)
+	for _, hcr := range hcrs {
+		hcrList, ok := habitIDHCRMap[hcr.HabitID]
+		if !ok {
+			hcrList = make([]*dal.HabitCheckRecord, 0, 32)
+		}
+		hcrList = append(hcrList, hcr)
+		habitIDHCRMap[hcr.HabitID] = hcrList
+	}
+
 	// construct return info
 	detailedHabits := make([]*DetailedHabit, 0, len(hs))
 	for _, h := range hs {
 		detailedHabits = append(detailedHabits, &DetailedHabit{
 			Habit:           h,
 			UserHabitConfig: habitIDUserHabitConfigMap[h.ID],
+			CheckRecords:    habitIDHCRMap[h.ID],
 		})
 	}
 	return detailedHabits, total, nil

@@ -116,10 +116,12 @@ func (r *HabitRouter) ListHabits(ctx context.Context, rc *app.RequestContext) {
 	}
 
 	uid := rc.GetString(UIDKey)
+	fromTime := time.Now().AddDate(-1, 0, 0)
+	toTime := time.Now()
 	habits, total, sErr := r.Ctrl.ListHabitsByUID(dal.UID(uid), &dal.Pagination{
 		Page:     req.Page,
 		PageSize: req.PageSize,
-	})
+	}, &fromTime, &toTime)
 
 	if sErr != nil {
 		resp.SetError(sErr)
