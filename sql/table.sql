@@ -18,10 +18,9 @@ CREATE TABLE IF NOT EXISTS `habits` (
     `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT 'primary key id',
     `name` varchar(255) NOT NULL COMMENT 'habit name',
     `identity_to_form` varchar(255) COMMENT 'identity to form',
-    `check_deadline_delay` tinyint unsigned COMMENT 'check time delay duration in hours',
-    `creator` varchar(32) NOT NULL COMMENT 'habit creator uid',
+    `owner` varchar(32) NOT NULL COMMENT 'habit owner uid',
     `create_at` datetime NOT NULL COMMENT 'create utc time',
-    `check_days` tinyint unsigned COMMENT 'days in week need to check, bit mask',
+    `log_days` tinyint unsigned COMMENT 'days in week need to log, bit mask',
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='habit info table';
 
@@ -36,18 +35,30 @@ CREATE TABLE IF NOT EXISTS `user_habit_configs` (
     `habit_id` bigint unsigned NOT NULL COMMENT 'habit primary key id',
     `current_streak` int unsigned NOT NULL COMMENT 'current consecutive record days',
     `longest_streak` int unsigned NOT NULL COMMENT 'longest consecutive record days',
-    `remain_recheck_chance` tinyint unsigned NOT NULL COMMENT 'remain recheck change',
+    `streak_update_at` datetime COMMENT 'when streak info was last updated',
+    `remain_retroactive_chance` tinyint unsigned NOT NULL COMMENT 'remain retroactive change',
     `heatmap_color` varchar(8) NOT NULL COMMENT 'heatmap hex rgb color',
     PRIMARY KEY (`habit_id`, `uid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='user habit config info';
 
-CREATE TABLE IF NOT EXISTS `habit_check_records` (
+CREATE TABLE IF NOT EXISTS `habit_log_records` (
     `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT 'primary key id',
     `habit_id` bigint unsigned NOT NULL COMMENT 'habit primary key id',
     `uid` varchar(32) NOT NULL COMMENT 'user id',
-    `check_at` datetime NOT NULL COMMENT 'check time',
+    `log_at` datetime NOT NULL COMMENT 'log time',
     PRIMARY KEY (`id`),
     index idx_habit_id(`habit_id`),
     index idx_uid(`uid`),
-    index idx_check_time(`check_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='user habit check record';
+    index idx_log_time(`log_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='user habit log record';
+
+CREATE TABLE IF NOT EXISTS `unconfirmed_habit_log_records` (
+    `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT 'primary key id',
+    `habit_id` bigint unsigned NOT NULL COMMENT 'habit primary key id',
+    `uid` varchar(32) NOT NULL COMMENT 'user id',
+    `log_at` datetime NOT NULL COMMENT 'log time',
+    PRIMARY KEY (`id`),
+    index idx_habit_id(`habit_id`),
+    index idx_uid(`uid`),
+    index idx_log_time(`log_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='user habit temporary log record';

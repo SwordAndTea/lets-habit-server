@@ -53,10 +53,6 @@ func (r *UserRegisterRequest) validate() response.SError {
 	if sErr != nil {
 		return sErr
 	}
-	sErr = ValidatePassword(r.Password)
-	if sErr != nil {
-		return sErr
-	}
 	return nil
 }
 

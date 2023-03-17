@@ -31,9 +31,15 @@ func main() {
 	Init()
 
 	h := server.Default()
-	// TODO: change allow origins by run env
+	var allowOrigins []string
+	switch config.GlobalConfig.RunMode {
+	case config.RunModeLocal:
+		allowOrigins = []string{"http://127.0.0.1:3000", "http://localhost:3000"}
+	case config.RunModelTest:
+	case config.RunModelProd:
+	}
 	h.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://127.0.0.1:3000", "http://localhost:3000"},
+		AllowOrigins:     allowOrigins,
 		AllowMethods:     []string{"GET", "PUT", "POST", "DELETE"},
 		AllowHeaders:     []string{"Origin", "Content-Type", handler.UserTokenHeader},
 		ExposeHeaders:    []string{"Content-Length", handler.UserTokenHeader},

@@ -6,9 +6,11 @@ import (
 	"gorm.io/gorm"
 )
 
-func WithDBTx(dbop func(tx *gorm.DB) response.SError) response.SError {
-	dbHD := service.GetDBExecutor()
-	tx := dbHD.Begin()
+func WithDBTx(dbConn *gorm.DB, dbop func(tx *gorm.DB) response.SError) response.SError {
+	if dbConn == nil {
+		dbConn = service.GetDBExecutor()
+	}
+	tx := dbConn.Begin()
 
 	err := dbop(tx)
 	if err != nil {

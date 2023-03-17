@@ -6,6 +6,12 @@ import (
 	"os"
 )
 
+const (
+	RunModeLocal = "local"
+	RunModelTest = "test"
+	RunModelProd = "prod"
+)
+
 type LogConfig struct {
 	Level string `yaml:"level" json:"level"`
 }
@@ -30,6 +36,7 @@ type JWTConfig struct {
 }
 
 type RuntimeConfig struct {
+	RunMode      string             `yaml:"-" json:"-"`
 	Log          LogConfig          `yaml:"log" json:"log"`
 	Mysql        MysqlConfig        `yaml:"mysql" json:"mysql"`
 	EmailService EmailServiceConfig `yaml:"email_service" json:"email_service"`
@@ -55,6 +62,7 @@ func InitConfig(filePath string) error {
 	if !ok {
 		return fmt.Errorf("unknown RUN_MODE %s", runMode)
 	}
+	c.RunMode = runMode
 	GlobalConfig = c
 
 	// read some env to overwrite config, usually is some sensitive config

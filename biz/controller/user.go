@@ -182,7 +182,7 @@ func (c *UserCtrl) EmailRegister(email string, password *dal.Password) (*dal.Use
 		UserRegisterType: dal.UserRegisterTypeEmail,
 	}
 
-	sErr = WithDBTx(func(tx *gorm.DB) response.SError {
+	sErr = WithDBTx(db, func(tx *gorm.DB) response.SError {
 		sErr = dal.UserDBHD.Add(tx, user)
 		if sErr != nil {
 			return sErr
@@ -265,9 +265,9 @@ func (c *UserCtrl) EmailActivate(activateCode string) (*dal.User, string /*user 
 
 	// do activate
 	var tokenStr string
-	sErr = WithDBTx(func(tx *gorm.DB) response.SError {
+	sErr = WithDBTx(db, func(tx *gorm.DB) response.SError {
 		// mark user email activated
-		sErr = dal.UserDBHD.UpdateUser(tx, uid, &dal.UserUpdatableFields{EmailActive: util.BoolPtr(true)})
+		sErr = dal.UserDBHD.UpdateUser(tx, uid, &dal.UserUpdatableFields{EmailActive: util.LiteralValuePtr(true)})
 		if sErr != nil {
 			return sErr
 		}
@@ -412,7 +412,7 @@ func (c *UserCtrl) UpdateUserBaseInfo(uid dal.UID, updateFields *UpdateUserBaseI
 		user.PortraitURL = service.GetObjectStorageExecutor().ObjectKeyToURL(updates.Portrait)
 	}
 
-	sErr = WithDBTx(func(tx *gorm.DB) response.SError {
+	sErr = WithDBTx(db, func(tx *gorm.DB) response.SError {
 		sErr = dal.UserDBHD.UpdateUser(tx, uid, updates)
 		if sErr != nil {
 			return sErr
