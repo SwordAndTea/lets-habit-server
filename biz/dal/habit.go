@@ -33,12 +33,12 @@ func (c CheckDay) Has(d CheckDay) bool {
 
 // Habit the habit model to represent a habit
 type Habit struct {
-	ID             uint64    `json:"id"`
-	Name           string    `json:"name"`
-	IdentityToForm *string   `json:"identity_to_form"`
-	LogDays        CheckDay  `json:"log_days"`
-	Owner          UID       `json:"owner"`
-	CreateAt       time.Time `json:"create_at"`
+	ID       uint64    `json:"id"`
+	Name     string    `json:"name"`
+	Identity *string   `json:"identity"`
+	LogDays  CheckDay  `json:"log_days"`
+	Owner    UID       `json:"owner"`
+	CreateAt time.Time `json:"create_at"`
 }
 
 // habitDBHD the handler to operate the habit table
@@ -89,11 +89,19 @@ func (hd *habitDBHD) ListUserJoinedHabits(db *gorm.DB, uid UID, pagination *Pagi
 }
 
 type HabitUpdatableFields struct {
-	Owner *UID
+	Name     *string
+	Identity *string
+	Owner    *UID
 }
 
 func (hd *habitDBHD) UpdateHabit(db *gorm.DB, id uint64, updateFields *HabitUpdatableFields) response.SError {
 	updates := map[string]interface{}{}
+	if updateFields.Name != nil {
+		updates["name"] = *updateFields.Name
+	}
+	if updateFields.Identity != nil {
+		updates["identity_to_from"] = *updateFields.Identity
+	}
 	if updateFields.Owner != nil {
 		updates["owner"] = *updateFields.Owner
 	}

@@ -1,6 +1,7 @@
 package dal
 
 import (
+	"github.com/pkg/errors"
 	"github.com/swordandtea/lets-habit-server/biz/response"
 	"gorm.io/gorm"
 	"time"
@@ -97,6 +98,18 @@ func (hd *userHabitConfigDBHD) IncreaseCurrentStreakByOne(db *gorm.DB, uids []UI
 		return response.ErrroCode_InternalUnknownError.Wrap(err, "update longest streak fail")
 	}
 	return nil
+}
+
+func (hd *userHabitConfigDBHD) GetByUIDAndHabitID(db *gorm.DB, uid UID, habitID uint64) (*UserHabitConfig, response.SError) {
+	var uhcs *UserHabitConfig
+	err := db.Where("uid=? and habit_id=?", uid, habitID).First(&uhcs).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, response.ErrroCode_InternalUnknownError.Wrap(err, "get user habit config fail")
+	}
+	return uhcs, nil
 }
 
 func (hd *userHabitConfigDBHD) ListUserHabitConfig(db *gorm.DB, uid UID, habits []uint64) ([]*UserHabitConfig, response.SError) {

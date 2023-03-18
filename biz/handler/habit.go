@@ -62,9 +62,9 @@ func (r *HabitRouter) CreateHabit(ctx context.Context, rc *app.RequestContext) {
 
 	uid := rc.GetString(UIDKey)
 	habit := &dal.Habit{
-		Name:           req.Name,
-		IdentityToForm: req.Identity,
-		LogDays:        req.CheckDays,
+		Name:     req.Name,
+		Identity: req.Identity,
+		LogDays:  req.CheckDays,
 	}
 
 	detailHabits, sErr := r.Ctrl.AddHabit(habit, dal.UID(uid), req.Cooperators, req.CustomConfig)
@@ -73,6 +73,50 @@ func (r *HabitRouter) CreateHabit(ctx context.Context, rc *app.RequestContext) {
 		return
 	}
 	resp.SetSuccessData(&CreateHabitResponse{Habit: detailHabits})
+}
+
+/*********************** Habit Router Get Habit Handler ***********************/
+
+type GetHabitRequest struct {
+	ID uint64 `path:"id"`
+}
+
+func (r *GetHabitRequest) validate() response.SError {
+	if r.ID == 0 {
+		return response.ErrorCode_InvalidParam.New("invalid habit id")
+	}
+	return nil
+}
+
+type GetHabitResponse struct {
+	Habit *controller.DetailedHabit `json:"habit"`
+}
+
+func (r *HabitRouter) GetHabit(ctx context.Context, rc *app.RequestContext) {
+	resp := response.NewHTTPResponse(rc)
+	defer resp.ReturnWithLog(ctx, rc)
+
+	req := &GetHabitRequest{}
+	err := rc.BindAndValidate(req)
+	if err != nil {
+		resp.SetError(BindAndValidateErr(err))
+		return
+	}
+
+	sErr := req.validate()
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+
+	uid := rc.GetString(UIDKey)
+	habit, sErr := r.Ctrl.GetHabitByID(req.ID, dal.UID(uid))
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+
+	resp.SetSuccessData(&GetHabitResponse{Habit: habit})
 }
 
 /*********************** Habit Router List Habits Handler ***********************/
@@ -158,17 +202,16 @@ func (r *HabitRouter) ListHabits(ctx context.Context, rc *app.RequestContext) {
 /*********************** Habit Router Update Habit Handler ***********************/
 
 type UpdateHabitReqeust struct {
-	HabitID             uint64    `path:"id"`
-	Identity            string    `json:"identity"`
-	CooperatorsToAdd    []dal.UID `json:"cooperators_to_add"`
-	CooperatorsToRemove []dal.UID `json:"cooperators_to_remove"`
+	HabitID uint64                         `path:"id"`
+	Updates *controller.HabitUpdatableInfo `json:"updates"`
 }
 
 func (r *UpdateHabitReqeust) validate() response.SError {
 	if r.HabitID == 0 {
 		return response.ErrorCode_InvalidParam.New("invalid habit id")
 	}
-	if r.Identity == "" && len(r.CooperatorsToAdd) == 0 && len(r.CooperatorsToRemove) == 0 {
+	if r.Updates.Name == nil && r.Updates.Identity == nil &&
+		len(r.Updates.CooperatorsToAdd) == 0 && len(r.Updates.CooperatorsToDelete) == 0 {
 		return response.ErrorCode_InvalidParam.New("no field need to update")
 	}
 	return nil
@@ -193,7 +236,7 @@ func (r *HabitRouter) UpdateHabit(ctx context.Context, rc *app.RequestContext) {
 
 	uid := rc.GetString(UIDKey)
 
-	sErr = r.Ctrl.UpdateHabit(dal.UID(uid), req.HabitID, req.CooperatorsToAdd, req.CooperatorsToRemove)
+	sErr = r.Ctrl.UpdateHabit(dal.UID(uid), req.HabitID, req.Updates)
 	if sErr != nil {
 		resp.SetError(sErr)
 		return

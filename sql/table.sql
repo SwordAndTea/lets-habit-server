@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS `users` (
 CREATE TABLE IF NOT EXISTS `habits` (
     `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT 'primary key id',
     `name` varchar(255) NOT NULL COMMENT 'habit name',
-    `identity_to_form` varchar(255) COMMENT 'identity to form',
+    `identity` varchar(255) COMMENT 'identity to form by forming this habit',
     `owner` varchar(32) NOT NULL COMMENT 'habit owner uid',
     `create_at` datetime NOT NULL COMMENT 'create utc time',
     `log_days` tinyint unsigned COMMENT 'days in week need to log, bit mask',
