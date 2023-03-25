@@ -4,8 +4,11 @@ package main
 
 import (
 	"github.com/cloudwego/hertz/pkg/app/server"
-	"github.com/swordandtea/fhwh/biz/config"
-	"github.com/swordandtea/fhwh/biz/service"
+	"github.com/hertz-contrib/cors"
+	"github.com/swordandtea/lets-habit-server/biz/config"
+	"github.com/swordandtea/lets-habit-server/biz/handler"
+	"github.com/swordandtea/lets-habit-server/biz/service"
+	"time"
 )
 
 func Init() {
@@ -13,7 +16,13 @@ func Init() {
 		panic(err)
 	}
 
-	if err := service.InitDB(); err != nil {
+	mysqlConf := config.GlobalConfig.Mysql
+	if err := service.InitDB(mysqlConf.DSN); err != nil {
+		panic(err)
+	}
+
+	mailServiceConf := config.GlobalConfig.EmailService
+	if err := service.InitMailService("", mailServiceConf.Sender, mailServiceConf.AuthCode, mailServiceConf.Host, mailServiceConf.Port); err != nil {
 		panic(err)
 	}
 }
@@ -22,6 +31,21 @@ func main() {
 	Init()
 
 	h := server.Default()
+	var allowOrigins []string
+	switch config.GlobalConfig.RunMode {
+	case config.RunModeLocal:
+		allowOrigins = []string{"http://127.0.0.1:3000", "http://localhost:3000"}
+	case config.RunModelTest:
+	case config.RunModelProd:
+	}
+	h.Use(cors.New(cors.Config{
+		AllowOrigins:     allowOrigins,
+		AllowMethods:     []string{"GET", "PUT", "POST", "DELETE"},
+		AllowHeaders:     []string{"Origin", "Content-Type", handler.UserTokenHeader},
+		ExposeHeaders:    []string{"Content-Length", handler.UserTokenHeader},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	register(h)
 	h.Spin()

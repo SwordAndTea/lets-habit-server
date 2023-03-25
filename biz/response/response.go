@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
-	"github.com/swordandtea/fhwh/util"
+	"github.com/swordandtea/lets-habit-server/util"
 	"net/http"
 	"os"
 	"path"
@@ -33,6 +33,7 @@ type SError interface {
 	Relocation() SError
 }
 
+// sErrorImpl the default implement of SError
 type sErrorImpl struct {
 	errorCode ErrorCode
 	codeLine  string
