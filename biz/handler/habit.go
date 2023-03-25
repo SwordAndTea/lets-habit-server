@@ -202,16 +202,16 @@ func (r *HabitRouter) ListHabits(ctx context.Context, rc *app.RequestContext) {
 /*********************** Habit Router Update Habit Handler ***********************/
 
 type UpdateHabitReqeust struct {
-	HabitID uint64                         `path:"id"`
-	Updates *controller.HabitUpdatableInfo `json:"updates"`
+	HabitID    uint64                                   `path:"id"`
+	BasicInfo  controller.HabitUpdatableInfo            `json:"basic_info"`
+	CustomInfo controller.UserHabitConfigUpdatableField `json:"custom_info"`
 }
 
 func (r *UpdateHabitReqeust) validate() response.SError {
 	if r.HabitID == 0 {
 		return response.ErrorCode_InvalidParam.New("invalid habit id")
 	}
-	if r.Updates.Name == nil && r.Updates.Identity == nil &&
-		len(r.Updates.CooperatorsToAdd) == 0 && len(r.Updates.CooperatorsToDelete) == 0 {
+	if !r.BasicInfo.IsValid() && !r.CustomInfo.IsValid() {
 		return response.ErrorCode_InvalidParam.New("no field need to update")
 	}
 	return nil
@@ -236,49 +236,7 @@ func (r *HabitRouter) UpdateHabit(ctx context.Context, rc *app.RequestContext) {
 
 	uid := rc.GetString(UIDKey)
 
-	sErr = r.Ctrl.UpdateHabit(dal.UID(uid), req.HabitID, req.Updates)
-	if sErr != nil {
-		resp.SetError(sErr)
-		return
-	}
-}
-
-/*********************** Habit Router Update Use Habit Custom Config Handler ***********************/
-
-type UpdateHabitUserCustomConfigRequest struct {
-	HabitID      uint64 `path:"habit_id"`
-	HeatmapColor string `json:"heatmap_color"`
-}
-
-func (r *UpdateHabitUserCustomConfigRequest) validate() response.SError {
-	if r.HabitID == 0 {
-		return response.ErrorCode_InvalidParam.New("invalid habit id")
-	}
-	if r.HeatmapColor == "" {
-		return response.ErrorCode_InvalidParam.New("no field to update")
-	}
-	return nil
-}
-
-func (r *HabitRouter) UpdateHabitUserCustomConfig(ctx context.Context, rc *app.RequestContext) {
-	resp := response.NewHTTPResponse(rc)
-	defer resp.ReturnWithLog(ctx, rc)
-
-	req := &UpdateHabitUserCustomConfigRequest{}
-	err := rc.BindAndValidate(req)
-	if err != nil {
-		resp.SetError(BindAndValidateErr(err))
-		return
-	}
-
-	sErr := req.validate()
-	if sErr != nil {
-		resp.SetError(sErr)
-		return
-	}
-
-	uid := rc.GetString(UIDKey)
-	sErr = r.Ctrl.UpdateUserHabitConfig(dal.UID(uid), req.HabitID, req.HeatmapColor)
+	sErr = r.Ctrl.UpdateHabit(dal.UID(uid), req.HabitID, &req.BasicInfo, &req.CustomInfo)
 	if sErr != nil {
 		resp.SetError(sErr)
 		return
@@ -306,7 +264,7 @@ func (r *LogHabitRequest) validate() response.SError {
 }
 
 type LogHabitResponse struct {
-	AllChecked bool `json:"all_checked"`
+	LogRecord *dal.HabitLogRecord `json:"log_record"`
 }
 
 func (r *HabitRouter) LogHabit(ctx context.Context, rc *app.RequestContext) {
@@ -327,11 +285,13 @@ func (r *HabitRouter) LogHabit(ctx context.Context, rc *app.RequestContext) {
 	}
 
 	uid := rc.GetString(UIDKey)
-	allChecked, sErr := r.Ctrl.LogHabit(dal.UID(uid), req.HabitID, req.LogTime)
+	logRecord, sErr := r.Ctrl.LogHabit(dal.UID(uid), req.HabitID, req.LogTime)
 	if sErr != nil {
 		resp.SetError(sErr)
 		return
 	}
 
-	resp.SetSuccessData(&LogHabitResponse{AllChecked: allChecked})
+	resp.SetSuccessData(&LogHabitResponse{
+		LogRecord: logRecord,
+	})
 }

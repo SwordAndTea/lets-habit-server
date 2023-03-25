@@ -33,7 +33,7 @@ type UserHabitConfigUpdatableFields struct {
 	CurrentStreak  *uint32
 	LongestStreak  *uint32
 	StreakUpdateAt *time.Time
-	HeatmapColor   *string
+	HeatmapColor   string
 }
 
 func (hd *userHabitConfigDBHD) Update(db *gorm.DB, uid UID, habitID uint64, updateFields *UserHabitConfigUpdatableFields) response.SError {
@@ -47,8 +47,8 @@ func (hd *userHabitConfigDBHD) Update(db *gorm.DB, uid UID, habitID uint64, upda
 	if updateFields.StreakUpdateAt != nil {
 		updates["streak_update_at"] = *updateFields.StreakUpdateAt
 	}
-	if updateFields.HeatmapColor != nil {
-		updates["heatmap_color"] = *updateFields.HeatmapColor
+	if updateFields.HeatmapColor != "" {
+		updates["heatmap_color"] = updateFields.HeatmapColor
 	}
 
 	if len(updates) == 0 {
@@ -72,8 +72,8 @@ func (hd *userHabitConfigDBHD) UpdateMany(db *gorm.DB, uid UID, habitIDs []uint6
 	if updateFields.StreakUpdateAt != nil {
 		updates["streak_update_at"] = *updateFields.StreakUpdateAt
 	}
-	if updateFields.HeatmapColor != nil {
-		updates["heatmap_color"] = *updateFields.HeatmapColor
+	if updateFields.HeatmapColor != "" {
+		updates["heatmap_color"] = updateFields.HeatmapColor
 	}
 
 	if len(updates) == 0 {
@@ -93,7 +93,7 @@ func (hd *userHabitConfigDBHD) IncreaseCurrentStreakByOne(db *gorm.DB, uids []UI
 		return response.ErrroCode_InternalUnknownError.Wrap(err, "increase current streak fail")
 	}
 	err = db.Model(&UserHabitConfig{}).Where("uid in (?) and habit_id=? and current_streak > longest_streak", uids, habitID).
-		UpdateColumn("longest_streak", "current_streak").UpdateColumn("streak_update_at", time.Now().UTC()).Error
+		UpdateColumn("longest_streak", gorm.Expr("current_streak")).UpdateColumn("streak_update_at", time.Now().UTC()).Error
 	if err != nil {
 		return response.ErrroCode_InternalUnknownError.Wrap(err, "update longest streak fail")
 	}

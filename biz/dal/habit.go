@@ -89,26 +89,26 @@ func (hd *habitDBHD) ListUserJoinedHabits(db *gorm.DB, uid UID, pagination *Pagi
 }
 
 type HabitUpdatableFields struct {
-	Name     *string
-	Identity *string
-	Owner    *UID
+	Name     string
+	Identity string
+	Owner    UID
 }
 
 func (hd *habitDBHD) UpdateHabit(db *gorm.DB, id uint64, updateFields *HabitUpdatableFields) response.SError {
 	updates := map[string]interface{}{}
-	if updateFields.Name != nil {
-		updates["name"] = *updateFields.Name
+	if updateFields.Name != "" {
+		updates["name"] = updateFields.Name
 	}
-	if updateFields.Identity != nil {
-		updates["identity_to_from"] = *updateFields.Identity
+	if updateFields.Identity != "" {
+		updates["identity"] = updateFields.Identity
 	}
-	if updateFields.Owner != nil {
-		updates["owner"] = *updateFields.Owner
+	if updateFields.Owner != "" {
+		updates["owner"] = updateFields.Owner
 	}
 	if len(updates) == 0 {
 		return nil
 	}
-	err := db.Model(&Habit{}).Where("uid=?", id).Updates(updates).Error
+	err := db.Model(&Habit{}).Where("id=?", id).Updates(updates).Error
 	if err != nil {
 		return response.ErrroCode_InternalUnknownError.Wrap(err, "update habit fail")
 	}

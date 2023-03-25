@@ -108,13 +108,26 @@ func (c *HabitCtrl) AddHabit(habit *dal.Habit, creator dal.UID, cooperators []da
 }
 
 type HabitUpdatableInfo struct {
-	Name                *string   `json:"name"`
-	Identity            *string   `json:"identity"`
+	Name                string    `json:"name"`
+	Identity            string    `json:"identity"`
 	CooperatorsToAdd    []dal.UID `json:"cooperators_to_add"`
 	CooperatorsToDelete []dal.UID `json:"cooperators_to_delete"`
 }
 
-func (c *HabitCtrl) UpdateHabit(uid dal.UID, habitID uint64, updates *HabitUpdatableInfo) response.SError {
+func (u *HabitUpdatableInfo) IsValid() bool {
+	return u.Name != "" || u.Identity != "" || len(u.CooperatorsToAdd) != 0 || len(u.CooperatorsToDelete) != 0
+}
+
+type UserHabitConfigUpdatableField struct {
+	HeatmapColor string `json:"heatmap_color"`
+}
+
+func (u *UserHabitConfigUpdatableField) IsValid() bool {
+	return u.HeatmapColor != ""
+}
+
+func (c *HabitCtrl) UpdateHabit(uid dal.UID, habitID uint64, basicInfo *HabitUpdatableInfo,
+	customConfig *UserHabitConfigUpdatableField) response.SError {
 	db := service.GetDBExecutor()
 	habit, sErr := dal.HabitDBHD.GetByID(db, habitID)
 	if sErr != nil {
@@ -123,73 +136,73 @@ func (c *HabitCtrl) UpdateHabit(uid dal.UID, habitID uint64, updates *HabitUpdat
 	if habit == nil {
 		return response.ErrorCode_InvalidParam.New("invalid habit id, not found")
 	}
-	if habit.Owner != uid {
-		return response.ErrorCode_UserNoPermission.New("only habit creator can update")
-	}
 
-	hgs, sErr := dal.HabitGroupDBHD.ListByHabitID(db, habitID)
+	habitGroups, sErr := dal.HabitGroupDBHD.ListByHabitID(db, habitID)
 	if sErr != nil {
 		return sErr
 	}
 
-	// TODO: verify cooperators to Add and cooperators to delete
-
-	if len(hgs)+len(updates.CooperatorsToAdd)-len(updates.CooperatorsToDelete) > CooperatorLimit {
-		return response.ErrorCode_InvalidParam.New("cooperator exceed limit")
+	inGroup := false
+	for _, hg := range habitGroups {
+		if hg.UID == uid {
+			inGroup = true
+			break
+		}
 	}
 
 	sErr = WithDBTx(db, func(tx *gorm.DB) response.SError {
-		if updates.Name != nil || updates.Identity != nil {
-			sErr = dal.HabitDBHD.UpdateHabit(tx, habitID, &dal.HabitUpdatableFields{
-				Name:     updates.Name,
-				Identity: updates.Identity,
+		// TODO: verify cooperators to Add and cooperators to delete
+		if basicInfo.IsValid() {
+			if habit.Owner != uid {
+				return response.ErrorCode_UserNoPermission.New("current user not own this habit")
+			}
+			if len(habitGroups)+len(basicInfo.CooperatorsToAdd)-len(basicInfo.CooperatorsToDelete) > CooperatorLimit {
+				return response.ErrorCode_InvalidParam.New("cooperator exceed limit")
+			}
+
+			if basicInfo.Name != "" || basicInfo.Identity != "" {
+				sErr = dal.HabitDBHD.UpdateHabit(tx, habitID, &dal.HabitUpdatableFields{
+					Name:     basicInfo.Name,
+					Identity: basicInfo.Identity,
+				})
+				if sErr != nil {
+					return sErr
+				}
+			}
+
+			if len(basicInfo.CooperatorsToAdd) != 0 {
+				hgsToAdd := make([]*dal.HabitGroup, 0, len(basicInfo.CooperatorsToAdd))
+				for _, cooperator := range basicInfo.CooperatorsToAdd {
+					hgsToAdd = append(hgsToAdd, &dal.HabitGroup{
+						HabitID: habitID,
+						UID:     cooperator,
+					})
+				}
+				sErr = dal.HabitGroupDBHD.AddMulti(tx, hgsToAdd)
+				if sErr != nil {
+					return sErr
+				}
+			}
+			if len(basicInfo.CooperatorsToDelete) != 0 {
+				sErr = dal.HabitGroupDBHD.DeleteByHabitIDAndUIDs(tx, habitID, basicInfo.CooperatorsToDelete)
+				if sErr != nil {
+					return sErr
+				}
+			}
+		}
+
+		if customConfig.IsValid() {
+			if !inGroup {
+				return response.ErrorCode_UserNoPermission.New("current user not in this habit")
+			}
+			sErr = dal.UserHabitConfigDBHD.Update(tx, uid, habitID, &dal.UserHabitConfigUpdatableFields{
+				HeatmapColor: customConfig.HeatmapColor,
 			})
 			if sErr != nil {
 				return sErr
 			}
 		}
-
-		if len(updates.CooperatorsToAdd) != 0 {
-			hgsToAdd := make([]*dal.HabitGroup, 0, len(updates.CooperatorsToAdd))
-			for _, cooperator := range updates.CooperatorsToAdd {
-				hgsToAdd = append(hgsToAdd, &dal.HabitGroup{
-					HabitID: habitID,
-					UID:     cooperator,
-				})
-			}
-			sErr = dal.HabitGroupDBHD.AddMulti(tx, hgsToAdd)
-			if sErr != nil {
-				return sErr
-			}
-		}
-		if len(updates.CooperatorsToDelete) != 0 {
-			sErr = dal.HabitGroupDBHD.DeleteByHabitIDAndUIDs(tx, habitID, updates.CooperatorsToDelete)
-			if sErr != nil {
-				return sErr
-			}
-		}
-
 		return nil
-	})
-	if sErr != nil {
-		return sErr
-	}
-	return nil
-}
-
-func (c *HabitCtrl) UpdateUserHabitConfig(uid dal.UID, habitID uint64, heatmapColor string) response.SError {
-	db := service.GetDBExecutor()
-	hg, sErr := dal.HabitGroupDBHD.GetByHabitIDAndUID(db, habitID, uid)
-	if sErr != nil {
-		return sErr
-	}
-	if hg == nil {
-		return response.ErrorCode_InvalidParam.New("current user is not in this habit")
-	}
-	sErr = WithDBTx(db, func(tx *gorm.DB) response.SError {
-		return dal.UserHabitConfigDBHD.Update(tx, uid, habitID, &dal.UserHabitConfigUpdatableFields{
-			HeatmapColor: &heatmapColor,
-		})
 	})
 	if sErr != nil {
 		return sErr
@@ -381,19 +394,19 @@ func (c *HabitCtrl) ListHabitsByUID(uid dal.UID, pagination *dal.Pagination, fro
 	return detailedHabits, total, nil
 }
 
-func (c *HabitCtrl) LogHabit(uid dal.UID, habitID uint64, logTime *time.Time) (bool /*all user checked*/, response.SError) {
+func (c *HabitCtrl) LogHabit(uid dal.UID, habitID uint64, logTime *time.Time) (*dal.HabitLogRecord, response.SError) {
 	db := service.GetDBExecutor()
 	habit, sErr := dal.HabitDBHD.GetByID(db, habitID)
 	if sErr != nil {
-		return false, sErr
+		return nil, sErr
 	}
 	if habit == nil {
-		return false, response.ErrorCode_InvalidParam.New("habit not exist")
+		return nil, response.ErrorCode_InvalidParam.New("habit not exist")
 	}
 
 	hgs, sErr := dal.HabitGroupDBHD.ListByHabitID(db, habitID)
 	if sErr != nil {
-		return false, sErr
+		return nil, sErr
 	}
 
 	inGroup := false
@@ -404,17 +417,22 @@ func (c *HabitCtrl) LogHabit(uid dal.UID, habitID uint64, logTime *time.Time) (b
 		}
 	}
 	if !inGroup {
-		return false, response.ErrorCode_UserNoPermission.New("current user has not joined this habit")
+		return nil, response.ErrorCode_UserNoPermission.New("current user has not joined this habit")
 	}
 
 	now := time.Now().In(logTime.Location())
 	dayBitMask := 1 << now.Add(-time.Hour*time.Duration(dal.HabitLogDelayHours)).Weekday()
 	if !habit.LogDays.Has(dal.CheckDay(dayBitMask)) {
-		return false, response.ErrorCode_InvalidParam.New("current day no need to log")
+		return nil, response.ErrorCode_InvalidParam.New("current day no need to log")
 	}
 
 	todayBegin, todayEnd := getTodayBeginEndTime(&now)
 	allChecked := true
+	newRecord := &dal.HabitLogRecord{
+		HabitID: habitID,
+		UID:     uid,
+		LogAt:   now.UTC(),
+	}
 	sErr = WithDBTx(db, func(tx *gorm.DB) response.SError {
 		logRecords, sErr := dal.UnconfirmedHabitLogRecordDBHD.ListByHabitID(tx, habitID, &todayBegin, &todayEnd)
 		if sErr != nil {
@@ -432,12 +450,11 @@ func (c *HabitCtrl) LogHabit(uid dal.UID, habitID uint64, logTime *time.Time) (b
 			uidList = append(uidList, lr.UID)
 		}
 		logMap[uid] = true
-		newRecord := &dal.HabitLogRecord{
-			HabitID: habitID,
-			UID:     uid,
-			LogAt:   now.UTC(),
+
+		sErr = dal.UnconfirmedHabitLogRecordDBHD.Add(tx, newRecord)
+		if sErr != nil {
+			return sErr
 		}
-		logRecords = append(logRecords, newRecord)
 
 		for _, hg := range hgs {
 			if !logMap[hg.UID] {
@@ -445,16 +462,18 @@ func (c *HabitCtrl) LogHabit(uid dal.UID, habitID uint64, logTime *time.Time) (b
 				break
 			}
 		}
-
 		if allChecked {
+			newRecord.ID = 0
+			logRecords = append(logRecords, newRecord)
 			sErr = dal.HabitLogRecordDBHD.AddMulti(tx, logRecords)
 			if sErr != nil {
 				return sErr
 			}
-			sErr = dal.UnconfirmedHabitLogRecordDBHD.DeleteByHabitID(tx, habitID, &todayBegin, &todayEnd)
-			if sErr != nil {
-				return sErr
-			}
+			//sErr = dal.UnconfirmedHabitLogRecordDBHD.DeleteByHabitID(tx, habitID, &todayBegin, &todayEnd)
+			//if sErr != nil {
+			//	return sErr
+			//}
+			uidList = append(uidList, uid)
 			sErr = dal.UserHabitConfigDBHD.IncreaseCurrentStreakByOne(tx, uidList, habitID)
 			if sErr != nil {
 				return sErr
@@ -469,10 +488,13 @@ func (c *HabitCtrl) LogHabit(uid dal.UID, habitID uint64, logTime *time.Time) (b
 	})
 
 	if sErr != nil {
-		return false, sErr
+		return nil, sErr
 	}
 
-	return allChecked, nil
+	if allChecked {
+		return newRecord, nil
+	}
+	return nil, nil
 }
 
 func deleteHabitCommonInfo(tx *gorm.DB, habitID uint64, uid dal.UID) response.SError {
@@ -531,7 +553,7 @@ func (c *HabitCtrl) DeleteHabitByID(habitID uint64, uid dal.UID) response.SError
 			})
 		} else {
 			sErr = WithDBTx(db, func(tx *gorm.DB) response.SError {
-				sErr = dal.HabitDBHD.UpdateHabit(tx, habitID, &dal.HabitUpdatableFields{Owner: &uid})
+				sErr = dal.HabitDBHD.UpdateHabit(tx, habitID, &dal.HabitUpdatableFields{Owner: uid})
 				if sErr != nil {
 					return sErr
 				}
