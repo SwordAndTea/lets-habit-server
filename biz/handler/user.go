@@ -32,12 +32,10 @@ func (r *UserRouter) GetUserInfoByAuth(ctx context.Context, rc *app.RequestConte
 		resp.SetError(sErr)
 		return
 	}
-	userToken, sErr := GenerateUserToken(dal.UID(uid))
+	sErr = SetUserTokenCookie(rc, user.UID)
 	if sErr != nil {
 		resp.SetError(sErr)
-		return
 	}
-	rc.Response.Header.Set(UserTokenHeader, userToken)
 	resp.SetSuccessData(&GetUserInfoByAuthResponse{User: user})
 }
 
@@ -83,13 +81,10 @@ func (r *UserRouter) RegisterByEmail(ctx context.Context, rc *app.RequestContext
 		return
 	}
 
-	userToken, sErr := GenerateUserToken(user.UID)
+	sErr = SetUserTokenCookie(rc, user.UID)
 	if sErr != nil {
 		resp.SetError(sErr)
-		return
 	}
-
-	rc.Response.Header.Set(UserTokenHeader, userToken)
 	resp.SetSuccessData(&UserRegisterResponse{
 		User: user,
 	})
@@ -180,13 +175,16 @@ func (r *UserRouter) ActivateEmail(ctx context.Context, rc *app.RequestContext) 
 		return
 	}
 
-	user, userToken, sErr := r.Ctrl.EmailActivate(req.ActivateCode)
+	user, sErr := r.Ctrl.EmailActivate(req.ActivateCode)
 	if sErr != nil {
 		resp.SetError(sErr)
 		return
 	}
 
-	rc.Response.Header.Set(UserTokenHeader, userToken)
+	sErr = SetUserTokenCookie(rc, user.UID)
+	if sErr != nil {
+		resp.SetError(sErr)
+	}
 	resp.SetSuccessData(&EmailActivateResponse{User: user})
 }
 
@@ -306,12 +304,10 @@ func (r *UserRouter) LoginByEmail(ctx context.Context, rc *app.RequestContext) {
 		return
 	}
 
-	userTokenStr, sErr := GenerateUserToken(user.UID)
+	sErr = SetUserTokenCookie(rc, user.UID)
 	if sErr != nil {
 		resp.SetError(sErr)
-		return
 	}
-	rc.Response.Header.Set(UserTokenHeader, userTokenStr)
 	resp.SetSuccessData(&UserLoginResponse{
 		User: user,
 	})

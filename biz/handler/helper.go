@@ -2,6 +2,8 @@ package handler
 
 import (
 	emailverify "github.com/AfterShip/email-verifier"
+	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/protocol"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/swordandtea/lets-habit-server/biz/config"
 	"github.com/swordandtea/lets-habit-server/biz/dal"
@@ -55,6 +57,25 @@ func GenerateUserToken(uid dal.UID) (string, response.SError) {
 		return "", response.ErrroCode_InternalUnknownError.Wrap(err, "generate user token fail")
 	}
 	return tokenStr, nil
+}
+
+func SetUserTokenCookie(rc *app.RequestContext, uid dal.UID) response.SError {
+	userToken, sErr := GenerateUserToken(uid)
+	if sErr != nil {
+		return sErr
+	}
+
+	rc.SetCookie(
+		UserTokenKey,
+		userToken,
+		int(UserTokenExpireTime/time.Second),
+		"/",
+		"",
+		protocol.CookieSameSiteLaxMode,
+		false,
+		true,
+	)
+	return nil
 }
 
 func ExtractUserToken(token string) (dal.UID, response.SError) {

@@ -6,7 +6,6 @@ import (
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/hertz-contrib/cors"
 	"github.com/swordandtea/lets-habit-server/biz/config"
-	"github.com/swordandtea/lets-habit-server/biz/handler"
 	"github.com/swordandtea/lets-habit-server/biz/service"
 	"time"
 )
@@ -34,15 +33,15 @@ func main() {
 	var allowOrigins []string
 	switch config.GlobalConfig.RunMode {
 	case config.RunModeLocal:
-		allowOrigins = []string{"http://127.0.0.1:3000", "http://localhost:3000"}
+		allowOrigins = []string{"http://localhost:3000"}
 	case config.RunModelTest:
 	case config.RunModelProd:
 	}
 	h.Use(cors.New(cors.Config{
 		AllowOrigins:     allowOrigins,
 		AllowMethods:     []string{"GET", "PUT", "POST", "DELETE"},
-		AllowHeaders:     []string{"Origin", "Content-Type", handler.UserTokenHeader},
-		ExposeHeaders:    []string{"Content-Length", handler.UserTokenHeader},
+		AllowHeaders:     []string{"Origin", "Content-Type"},
+		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))

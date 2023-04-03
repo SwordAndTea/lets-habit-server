@@ -10,13 +10,13 @@ import (
 )
 
 const UIDKey = "uid"
-const UserTokenHeader = "x-lh-auth"
+const UserTokenKey = "x-lh-auth"
 
 // UserTokenVerify verify user token, return user auth fail error if verify fail, set uid to RequestContext if success
 func UserTokenVerify() app.HandlerFunc {
 	return func(ctx context.Context, rc *app.RequestContext) {
 		resp := response.NewHTTPResponse(rc)
-		userToken := string(rc.GetHeader(UserTokenHeader))
+		userToken := string(rc.Request.Header.Cookie(UserTokenKey))
 		if userToken == "" {
 			resp.SetError(response.ErrorCode_UserAuthFail.New("no user token found"))
 			resp.Abort(ctx, rc)

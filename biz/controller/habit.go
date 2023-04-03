@@ -346,6 +346,7 @@ func (c *HabitCtrl) ListHabitsByUID(uid dal.UID, pagination *dal.Pagination, fro
 	// construct return info
 	habitToClearStreak := make([]uint64, 0, len(habits))
 	detailedHabits := make([]*DetailedHabit, 0, len(habits))
+	startWeekday := now.Weekday()
 	for _, h := range habits {
 		_, ok := habitIDUHLRMap[h.ID]
 		uhc := habitIDUserHabitConfigMap[h.ID]
@@ -360,7 +361,7 @@ func (c *HabitCtrl) ListHabitsByUID(uid dal.UID, pagination *dal.Pagination, fro
 			latestCheckTime := habitLatestCheckTime[h.ID]
 			latestCheckTimeWeekday := latestCheckTime.In(toTime.Location()).Weekday()
 			// get last day need to log habit
-			curWeekday := now.Weekday()
+			curWeekday := startWeekday
 			for i := 1; i < 7; i++ {
 				targetWeekDay := int(curWeekday) - i
 				if targetWeekDay < 0 {

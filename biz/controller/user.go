@@ -241,52 +241,38 @@ func (c *UserCtrl) ResendActivateEmail(uid dal.UID) response.SError {
 }
 
 // EmailActivate confirm email activate, create a new user if activate success
-func (c *UserCtrl) EmailActivate(activateCode string) (*dal.User, string /*user token*/, response.SError) {
+func (c *UserCtrl) EmailActivate(activateCode string) (*dal.User, response.SError) {
 	// verify activate code
 	claims := &jwt.RegisteredClaims{}
 	_, err := jwt.ParseWithClaims(activateCode, claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(config.GlobalConfig.JWT.Cypher), nil
 	})
 	if err != nil {
-		return nil, "", response.ErrorCode_UserNoPermission.Wrap(err, "invalid activate code")
+		return nil, response.ErrorCode_UserNoPermission.Wrap(err, "invalid activate code")
 	}
 	db := service.GetDBExecutor()
 	uid := dal.UID(claims.ID)
 	user, sErr := dal.UserDBHD.GetByUID(db, uid)
 	if sErr != nil {
-		return nil, "", sErr
+		return nil, sErr
 	}
 	if user == nil {
-		return nil, "", response.ErrorCode_InvalidParam.Wrap(err, "invalid activate code, no user found")
+		return nil, response.ErrorCode_InvalidParam.Wrap(err, "invalid activate code, no user found")
 	}
 	if user.EmailActive {
-		return nil, "", response.ErrorCode_UserNoPermission.Wrap(err, "email already activated")
+		return nil, response.ErrorCode_UserNoPermission.Wrap(err, "email already activated")
 	}
 
 	// do activate
-	var tokenStr string
 	sErr = WithDBTx(db, func(tx *gorm.DB) response.SError {
 		// mark user email activated
-		sErr = dal.UserDBHD.UpdateUser(tx, uid, &dal.UserUpdatableFields{EmailActive: util.LiteralValuePtr(true)})
-		if sErr != nil {
-			return sErr
-		}
-		// gen user token
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, &jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(userTokenExpireTime)),
-			ID:        xid.New().String(),
-		})
-		tokenStr, err = token.SignedString([]byte(config.GlobalConfig.JWT.Cypher))
-		if err != nil {
-			return response.ErrroCode_InternalUnknownError.Wrap(err, "sign user token fail")
-		}
-		return nil
+		return dal.UserDBHD.UpdateUser(tx, uid, &dal.UserUpdatableFields{EmailActive: util.LiteralValuePtr(true)})
 	})
 	if sErr != nil {
-		return nil, "", sErr
+		return nil, sErr
 	}
 	user.EmailActive = true
-	return user, tokenStr, nil
+	return user, nil
 }
 
 // StartEmailBinding begin email bind process, will send an email bind email to user

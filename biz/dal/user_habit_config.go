@@ -88,12 +88,17 @@ func (hd *userHabitConfigDBHD) UpdateMany(db *gorm.DB, uid UID, habitIDs []uint6
 
 func (hd *userHabitConfigDBHD) IncreaseCurrentStreakByOne(db *gorm.DB, uids []UID, habitID uint64) response.SError {
 	err := db.Model(&UserHabitConfig{}).Where("uid in (?) and habit_id=?", uids, habitID).
-		UpdateColumn("current_streak", gorm.Expr("current_streak + ?", 1)).Error
+		UpdateColumns(map[string]interface{}{
+			"current_streak":   gorm.Expr("current_streak + ?", 1),
+			"streak_update_at": time.Now().UTC(),
+		}).Error
 	if err != nil {
 		return response.ErrroCode_InternalUnknownError.Wrap(err, "increase current streak fail")
 	}
-	err = db.Model(&UserHabitConfig{}).Where("uid in (?) and habit_id=? and current_streak > longest_streak", uids, habitID).
-		UpdateColumn("longest_streak", gorm.Expr("current_streak")).UpdateColumn("streak_update_at", time.Now().UTC()).Error
+	err = db.Model(&UserHabitConfig{}).
+		Where("uid in (?) and habit_id=? and current_streak > longest_streak", uids, habitID).
+		UpdateColumn("longest_streak", gorm.Expr("current_streak")).
+		UpdateColumn("streak_update_at", time.Now().UTC()).Error
 	if err != nil {
 		return response.ErrroCode_InternalUnknownError.Wrap(err, "update longest streak fail")
 	}
