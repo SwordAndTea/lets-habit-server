@@ -29,6 +29,14 @@ func (hd *userHabitConfigDBHD) Add(db *gorm.DB, c *UserHabitConfig) response.SEr
 	return nil
 }
 
+func (hd *userHabitConfigDBHD) AddMulti(db *gorm.DB, cs []*UserHabitConfig) response.SError {
+	err := db.CreateInBatches(cs, 10).Error
+	if err != nil {
+		return response.ErrroCode_InternalUnknownError.Wrap(err, "add multi user habit config fail")
+	}
+	return nil
+}
+
 type UserHabitConfigUpdatableFields struct {
 	CurrentStreak  *uint32
 	LongestStreak  *uint32

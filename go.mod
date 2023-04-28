@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/AfterShip/email-verifier v1.3.0
+	github.com/aws/aws-sdk-go v1.44.236
 	github.com/cloudwego/hertz v0.3.2
 	github.com/golang-jwt/jwt/v4 v4.4.2
 	github.com/hertz-contrib/cors v0.0.0-20220601061225-50f4e582beaf
@@ -29,6 +30,7 @@ require (
 	github.com/henrylee2cn/goutil v0.0.0-20210127050712-89660552f6f8 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
+	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/nyaruka/phonenumbers v1.0.55 // indirect
 	github.com/tidwall/gjson v1.13.0 // indirect
@@ -36,9 +38,9 @@ require (
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	golang.org/x/arch v0.0.0-20210923205945-b76863e36670 // indirect
-	golang.org/x/net v0.0.0-20221002022538-bcab6841153b // indirect
-	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10 // indirect
-	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/net v0.1.0 // indirect
+	golang.org/x/sys v0.1.0 // indirect
+	golang.org/x/text v0.4.0 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 	h12.io/socks v1.0.3 // indirect
 )

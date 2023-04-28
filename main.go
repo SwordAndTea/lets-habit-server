@@ -24,6 +24,10 @@ func Init() {
 	if err := service.InitMailService("", mailServiceConf.Sender, mailServiceConf.AuthCode, mailServiceConf.Host, mailServiceConf.Port); err != nil {
 		panic(err)
 	}
+
+	if err := service.InitObjectStorage(&config.GlobalConfig.ObjectStorage); err != nil {
+		panic(err)
+	}
 }
 
 func main() {

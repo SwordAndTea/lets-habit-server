@@ -93,32 +93,3 @@ func ExtractUserToken(token string) (dal.UID, response.SError) {
 	}
 	return dal.UID(claims.ID), nil
 }
-
-func GeneratePollToken(uid dal.UID) (string, response.SError) {
-	claims := &jwt.RegisteredClaims{
-		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(time.Minute * 30)),
-		NotBefore: nil,
-		IssuedAt:  nil,
-		ID:        string(uid),
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenStr, err := token.SignedString([]byte(config.GlobalConfig.JWT.Cypher))
-	if err != nil {
-		return "", response.ErrroCode_InternalUnknownError.Wrap(err, "generate poll token fail")
-	}
-	return tokenStr, nil
-}
-
-func ExtractPollToken(token string) (dal.UID, response.SError) {
-	claims := &jwt.RegisteredClaims{}
-	_, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(config.GlobalConfig.JWT.Cypher), nil
-	})
-	if err != nil {
-		return "", response.ErrorCode_UserNoPermission.Wrap(err, "invalid poll token")
-	}
-	if claims.ID == "" {
-		return "", response.ErrorCode_UserNoPermission.New("invalid poll token, no user id found")
-	}
-	return dal.UID(claims.ID), nil
-}

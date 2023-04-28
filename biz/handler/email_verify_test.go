@@ -6,8 +6,8 @@ import (
 )
 
 func TestEmailVerify(t *testing.T) {
-	verifier := emailverify.NewVerifier().EnableSMTPCheck().EnableAutoUpdateDisposable()
-	ret, err := verifier.Verify("xxx@gmail.com")
+	v := emailverify.NewVerifier().EnableSMTPCheck().EnableAutoUpdateDisposable()
+	ret, err := v.Verify("xxx@gmail.com")
 	if err != nil {
 		t.Fatal(err)
 	}

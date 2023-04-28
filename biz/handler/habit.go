@@ -295,3 +295,28 @@ func (r *HabitRouter) LogHabit(ctx context.Context, rc *app.RequestContext) {
 		LogRecord: logRecord,
 	})
 }
+
+/*********************** Habit Router Delete Habit Handler ***********************/
+
+type DeleteHabitRequest struct {
+	HabitID uint64 `path:"id"`
+}
+
+func (r *HabitRouter) DeleteHabit(ctx context.Context, rc *app.RequestContext) {
+	resp := response.NewHTTPResponse(rc)
+	defer resp.ReturnWithLog(ctx, rc)
+
+	req := &DeleteHabitRequest{}
+	err := rc.BindAndValidate(req)
+	if err != nil {
+		resp.SetError(BindAndValidateErr(err))
+		return
+	}
+
+	uid := rc.GetString(UIDKey)
+	sErr := r.Ctrl.DeleteHabitByID(dal.UID(uid), req.HabitID)
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+}

@@ -20,6 +20,14 @@ type MysqlConfig struct {
 	DSN string `yaml:"dsn" json:"dsn"`
 }
 
+type ObjectStorageConfig struct {
+	Endpoint string `yaml:"endpoint" json:"endpoint"`
+	Region   string `yaml:"region" json:"region"`
+	AK       string `yaml:"ak" json:"ak"`
+	SK       string `yaml:"sk" json:"sk"`
+	Bucket   string `yaml:"bucket" json:"bucket"`
+}
+
 type EmailServiceConfig struct {
 	Sender        string `yaml:"sender" json:"sender"`
 	Host          string `yaml:"host" json:"host"`
@@ -36,11 +44,12 @@ type JWTConfig struct {
 }
 
 type RuntimeConfig struct {
-	RunMode      string             `yaml:"-" json:"-"`
-	Log          LogConfig          `yaml:"log" json:"log"`
-	Mysql        MysqlConfig        `yaml:"mysql" json:"mysql"`
-	EmailService EmailServiceConfig `yaml:"email_service" json:"email_service"`
-	JWT          JWTConfig          `yaml:"jwt" json:"jwt"`
+	RunMode       string              `yaml:"-" json:"-"`
+	Log           LogConfig           `yaml:"log" json:"log"`
+	Mysql         MysqlConfig         `yaml:"mysql" json:"mysql"`
+	ObjectStorage ObjectStorageConfig `yaml:"object_storage" json:"object_storage"`
+	EmailService  EmailServiceConfig  `yaml:"email_service" json:"email_service"`
+	JWT           JWTConfig           `yaml:"jwt" json:"jwt"`
 }
 
 var GlobalConfig *RuntimeConfig

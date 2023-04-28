@@ -17,17 +17,18 @@ func customizedRegister(r *server.Hertz) {
 	// register user related api
 	userRouter := handler.NewUserRouter()
 	{
-		apiV1.GET("/user", handler.UserTokenVerify(), userRouter.GetUserInfoByAuth)
-		apiV1.GET("/user/ping", handler.UserTokenVerify())
+		// email login register
 		apiV1.POST("/user/register/email", userRouter.RegisterByEmail)
-		//apiV1.GET("/user/register/email/activate/check", userRouter.CheckEmailActivated)
-		apiV1.POST("/user/register/email/activate/resend", handler.UserTokenVerify(), userRouter.ResendActivateEmail)
 		apiV1.POST("/user/register/email/activate", userRouter.ActivateEmail)
+		apiV1.POST("/user/register/email/activate/resend", handler.UserTokenVerify(), userRouter.ResendActivateEmail)
 		apiV1.POST("/user/login/email", userRouter.LoginByEmail)
 
+		// user info
+		apiV1.GET("/user", handler.UserTokenVerify(), userRouter.GetUserInfoByAuth)
 		apiV1.PUT("/user/base", handler.UserTokenVerify(), userRouter.UpdateUserBaseInfo)
 		apiV1.POST("/user/search", handler.UserTokenVerify(), userRouter.UserSearch)
 
+		// email bind
 		apiV1.POST("/user/email/bind", handler.UserTokenVerify(), userRouter.SubmitBindEmail)
 		apiV1.GET("/user/email/bind/confirm", userRouter.ConfirmBindEmail)
 	}
@@ -36,9 +37,10 @@ func customizedRegister(r *server.Hertz) {
 	habitRouter := handler.NewHabitRouter()
 	{
 		apiV1.POST("/habit", handler.UserTokenVerify(), habitRouter.CreateHabit)
-		apiV1.GET("habit/:id", handler.UserTokenVerify(), habitRouter.GetHabit)
+		apiV1.GET("/habit/:id", handler.UserTokenVerify(), habitRouter.GetHabit)
 		apiV1.GET("/habit/list", handler.UserTokenVerify(), habitRouter.ListHabits)
 		apiV1.PUT("/habit/:id", handler.UserTokenVerify(), habitRouter.UpdateHabit)
 		apiV1.POST("/habit/log/:id", handler.UserTokenVerify(), habitRouter.LogHabit)
+		apiV1.DELETE("/habit/:id", handler.UserTokenVerify(), habitRouter.DeleteHabit)
 	}
 }

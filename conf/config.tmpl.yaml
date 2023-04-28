@@ -3,12 +3,18 @@ local:
     level: DEBUG
   mysql:
     dsn: 'root:123456@tcp(localhost:3306)/lets_habit?charset=utf8mb4&parseTime=true'
+  object_storage:
+    endpoint: 'localhost:9000'
+    region: 'default'
+    ak: ''
+    sk: ''
+    bucket: 'lets-habit'
   email_service:
     sender: 'xxx@xxx.com'
     host: 'smtp.xxx.com'
     port: 587
     auth_code: 'xxxx'
-    activate_uri: 'http://localhost:8888/api/v1/user/register/email/activate'
+    activate_uri: 'http://localhost:3000/user/email/activate'
     activate_param: 'code'
     bind_uri: ''
     bind_param: ''
@@ -20,6 +26,12 @@ test:
     level: DEBUG
   mysql:
     dsn: ''
+  object_storage:
+    endpoint: ''
+    region: 'default'
+    ak: ''
+    sk: ''
+    bucket: 'lets-habit'
   email_service:
     sender: ''
     host: ''
@@ -35,6 +47,12 @@ prod:
     level: INFO
   mysql:
     dsn: ''
+  object_storage:
+    endpoint: ''
+    region: 'default'
+    ak: ''
+    sk: ''
+    bucket: 'lets-habit'
   email_service:
     sender: ''
     host: ''

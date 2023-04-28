@@ -5,6 +5,7 @@ import (
 	"github.com/swordandtea/lets-habit-server/biz/response"
 	"github.com/swordandtea/lets-habit-server/biz/service"
 	"gorm.io/gorm"
+	"time"
 )
 
 // UserRegisterType indentify how user is registered
@@ -33,7 +34,7 @@ type User struct {
 func postProcessUserField(users []*User) {
 	for _, u := range users {
 		if u.Portrait != nil {
-			u.PortraitURL = service.GetObjectStorageExecutor().ObjectKeyToURL(*u.Portrait)
+			u.PortraitURL, _ = service.GetObjectStorageExecutor().ObjectKeyToURL(*u.Portrait, time.Hour)
 		}
 	}
 }

@@ -2,15 +2,19 @@ package service
 
 import (
 	"context"
-	"net/url"
-	"os"
-	"path"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/swordandtea/lets-habit-server/biz/config"
+	"io"
+	"time"
 )
 
 type ObjectStorage interface {
-	GetObject(ctx context.Context, key string) ([]byte, error)
-	PutObject(ctx context.Context, key string, data []byte) error
-	ObjectKeyToURL(key string) string
+	GetObject(ctx context.Context, key string) (io.ReadCloser, error)
+	PutObject(ctx context.Context, key string, data io.Reader) error
+	ObjectKeyToURL(key string, ttl time.Duration) (string, error)
 }
 
 var currentObjectStorageImpl ObjectStorage
@@ -19,40 +23,62 @@ func GetObjectStorageExecutor() ObjectStorage {
 	return currentObjectStorageImpl
 }
 
-/********************** Local Mock Object Storage Impl  ***********************/
-
-type objectStorageImplLocalMock struct {
-	urlPrefix        string
-	localStorageRoot string
+type ObjectStorageImplS3 struct {
+	bucket string
+	cli    *s3.S3
 }
 
-func InitObjectStorageWithLocalMockImpl(urlPrefix string, rootDir string) error {
-	currentObjectStorageImpl = &objectStorageImplLocalMock{urlPrefix: urlPrefix, localStorageRoot: rootDir}
-	return nil
-}
-
-func (s *objectStorageImplLocalMock) GetObject(ctx context.Context, key string) ([]byte, error) {
-	fileData, err := os.ReadFile(path.Join(s.localStorageRoot, key))
+func (impl *ObjectStorageImplS3) GetObject(ctx context.Context, key string) (io.ReadCloser, error) {
+	out, err := impl.cli.GetObject(&s3.GetObjectInput{
+		Bucket: aws.String(impl.bucket),
+		Key:    aws.String(key),
+	})
 	if err != nil {
 		return nil, err
 	}
-	return fileData, nil
+
+	return out.Body, nil
 }
 
-func (s *objectStorageImplLocalMock) PutObject(ctx context.Context, key string, data []byte) error {
-	err := os.WriteFile(path.Join(s.localStorageRoot, key), data, 666)
+func (impl *ObjectStorageImplS3) PutObject(ctx context.Context, key string, data io.Reader) error {
+	_, err := impl.cli.PutObject(&s3.PutObjectInput{
+		Body:   aws.ReadSeekCloser(data),
+		Bucket: aws.String(impl.bucket),
+		Key:    aws.String(key),
+	})
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *objectStorageImplLocalMock) ObjectKeyToURL(key string) string {
-	uri, _ := url.JoinPath(s.urlPrefix, s.localStorageRoot, key)
-	return uri
+func (impl *ObjectStorageImplS3) ObjectKeyToURL(key string, ttl time.Duration) (string, error) {
+	req, _ := impl.cli.GetObjectRequest(&s3.GetObjectInput{
+		Bucket: aws.String(impl.bucket),
+		Key:    aws.String(key),
+	})
+	signedURL, err := req.Presign(ttl)
+	if err != nil {
+		return "", err
+	}
+	return signedURL, nil
 }
 
-/********************** Wechat Cloud Object Storage Impl  ***********************/
-
-type objectStorageImplWechatCloud struct {
+func InitObjectStorage(conf *config.ObjectStorageConfig) error {
+	s, err := session.NewSession(&aws.Config{
+		Credentials:      credentials.NewStaticCredentials(conf.AK, conf.SK, ""),
+		Endpoint:         aws.String(conf.Endpoint),
+		Region:           aws.String(conf.Region),
+		DisableSSL:       aws.Bool(true),
+		S3ForcePathStyle: aws.Bool(true),
+	})
+	if err != nil {
+		return err
+	}
+	s3Cli := s3.New(s)
+	currentObjectStorageImpl = &ObjectStorageImplS3{
+		bucket: conf.Bucket,
+		cli:    s3Cli,
+	}
+	return nil
 }

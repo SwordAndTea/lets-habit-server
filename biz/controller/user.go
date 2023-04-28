@@ -395,7 +395,7 @@ func (c *UserCtrl) UpdateUserBaseInfo(uid dal.UID, updateFields *UpdateUserBaseI
 		}
 		updates.Portrait = fmt.Sprintf("portrait/%s.%s", uid, imageFormat)
 		user.Portrait = &updates.Portrait
-		user.PortraitURL = service.GetObjectStorageExecutor().ObjectKeyToURL(updates.Portrait)
+		user.PortraitURL, _ = service.GetObjectStorageExecutor().ObjectKeyToURL(updates.Portrait, time.Hour)
 	}
 
 	sErr = WithDBTx(db, func(tx *gorm.DB) response.SError {
@@ -405,7 +405,7 @@ func (c *UserCtrl) UpdateUserBaseInfo(uid dal.UID, updateFields *UpdateUserBaseI
 		}
 		if len(portraitData) > 0 {
 			osExecutor := service.GetObjectStorageExecutor()
-			err := osExecutor.PutObject(ctx, updates.Portrait, portraitData)
+			err := osExecutor.PutObject(ctx, updates.Portrait, bytes.NewReader(portraitData))
 			if err != nil {
 				return response.ErrroCode_InternalUnknownError.Wrap(err, "put portrait data fail")
 			}

@@ -19,11 +19,12 @@ type HabitCustomConfig struct {
 
 // DetailedHabit a struct to represent a habit and its group user
 type DetailedHabit struct {
-	Habit           *dal.Habit            `json:"habit"`
-	UserHabitConfig *dal.UserHabitConfig  `json:"user_custom_config"`
-	Cooperators     []*SimplifiedUser     `json:"cooperators"`
-	LogRecords      []*dal.HabitLogRecord `json:"log_records"`
-	TodayLogged     bool                  `json:"today_logged"`
+	Habit               *dal.Habit            `json:"habit"`
+	UserHabitConfig     *dal.UserHabitConfig  `json:"user_custom_config"`
+	Cooperators         []*SimplifiedUser     `json:"cooperators"`
+	CooperatorLogStatus map[dal.UID]bool      `json:"cooperator_log_status"`
+	LogRecords          []*dal.HabitLogRecord `json:"log_records"`
+	TodayLogged         bool                  `json:"today_logged"`
 }
 
 // AddHabit add a habit and its group user info
@@ -48,15 +49,33 @@ func (c *HabitCtrl) AddHabit(habit *dal.Habit, creator dal.UID, cooperators []da
 			return sErr
 		}
 		hgs := make([]*dal.HabitGroup, 0, len(cooperators)+1)
+		uhcs := make([]*dal.UserHabitConfig, 0, len(cooperators)+1)
 		hgs = append(hgs, &dal.HabitGroup{
 			HabitID: habit.ID,
 			UID:     creator,
 		})
+		uhcs = append(uhcs, &dal.UserHabitConfig{
+			UID:                     creator,
+			HabitID:                 habit.ID,
+			CurrentStreak:           0,
+			LongestStreak:           0,
+			RemainRetroactiveChance: 0,
+			HeatmapColor:            customConfig.HeatmapColor,
+		})
+
 		for _, uid := range cooperators {
 			if uid != creator {
 				hgs = append(hgs, &dal.HabitGroup{
 					HabitID: habit.ID,
 					UID:     uid,
+				})
+				uhcs = append(uhcs, &dal.UserHabitConfig{
+					UID:                     uid,
+					HabitID:                 habit.ID,
+					CurrentStreak:           0,
+					LongestStreak:           0,
+					RemainRetroactiveChance: 0,
+					HeatmapColor:            customConfig.HeatmapColor,
 				})
 			}
 		}
@@ -65,16 +84,7 @@ func (c *HabitCtrl) AddHabit(habit *dal.Habit, creator dal.UID, cooperators []da
 			return sErr
 		}
 
-		uhc := &dal.UserHabitConfig{
-			UID:                     creator,
-			HabitID:                 habit.ID,
-			CurrentStreak:           0,
-			LongestStreak:           0,
-			RemainRetroactiveChance: 0,
-			HeatmapColor:            customConfig.HeatmapColor,
-		}
-
-		sErr = dal.UserHabitConfigDBHD.Add(tx, uhc)
+		sErr = dal.UserHabitConfigDBHD.AddMulti(tx, uhcs)
 		if sErr != nil {
 			return sErr
 		}
@@ -260,6 +270,8 @@ func (c *HabitCtrl) GetHabitByID(habitID uint64, uid dal.UID) (*DetailedHabit, r
 		})
 	}
 
+	// TODO: return log record info, check should update streak info
+
 	return &DetailedHabit{
 		Habit:           habit,
 		UserHabitConfig: userHabitConfig,
@@ -297,9 +309,45 @@ func (c *HabitCtrl) ListHabitsByUID(uid dal.UID, pagination *dal.Pagination, fro
 		return nil, 0, sErr
 	}
 
-	habitIDUserHabitConfigMap := make(map[uint64]*dal.UserHabitConfig)
+	userHabitConfigMap := make(map[uint64]*dal.UserHabitConfig)
 	for _, uhc := range userHabitConfigs {
-		habitIDUserHabitConfigMap[uhc.HabitID] = uhc
+		userHabitConfigMap[uhc.HabitID] = uhc
+	}
+
+	// get habit cooperator infos
+	habitGroups, sErr := dal.HabitGroupDBHD.ListByHabitIDs(db, habitIDs)
+	if sErr != nil {
+		return nil, 0, sErr
+	}
+
+	distinctUserMap := make(map[dal.UID]struct{})
+	for _, hg := range habitGroups {
+		distinctUserMap[hg.UID] = struct{}{}
+	}
+	distinctUserList := make([]dal.UID, 0, len(distinctUserMap))
+	for k := range distinctUserMap {
+		distinctUserList = append(distinctUserList, k)
+	}
+	users, sErr := dal.UserDBHD.ListByUIDs(db, distinctUserList)
+	if sErr != nil {
+		return nil, 0, sErr
+	}
+	userMap := make(map[dal.UID]*SimplifiedUser)
+	for _, u := range users {
+		userMap[u.UID] = &SimplifiedUser{
+			UID:      u.UID,
+			Name:     u.Name,
+			Portrait: u.PortraitURL,
+		}
+	}
+	habitCooperatorMap := make(map[uint64][]*SimplifiedUser)
+	for _, hg := range habitGroups {
+		cooperators, ok := habitCooperatorMap[hg.HabitID]
+		if !ok {
+			cooperators = make([]*SimplifiedUser, 0, 8)
+		}
+		cooperators = append(cooperators, userMap[hg.UID])
+		habitCooperatorMap[hg.HabitID] = cooperators
 	}
 
 	// get user habit log record
@@ -308,14 +356,14 @@ func (c *HabitCtrl) ListHabitsByUID(uid dal.UID, pagination *dal.Pagination, fro
 		return nil, 0, sErr
 	}
 	habitLatestCheckTime := make(map[uint64]*time.Time)
-	habitIDHLRMap := make(map[uint64][]*dal.HabitLogRecord)
+	habitLogRecordMap := make(map[uint64][]*dal.HabitLogRecord)
 	for _, hlr := range habitLogRecords {
-		recordList, ok := habitIDHLRMap[hlr.HabitID]
+		recordList, ok := habitLogRecordMap[hlr.HabitID]
 		if !ok {
 			recordList = make([]*dal.HabitLogRecord, 0, 32)
 		}
 		recordList = append(recordList, hlr)
-		habitIDHLRMap[hlr.HabitID] = recordList
+		habitLogRecordMap[hlr.HabitID] = recordList
 		latestCheckTime, ok := habitLatestCheckTime[hlr.HabitID]
 		if !ok {
 			habitLatestCheckTime[hlr.HabitID] = &hlr.LogAt
@@ -331,7 +379,7 @@ func (c *HabitCtrl) ListHabitsByUID(uid dal.UID, pagination *dal.Pagination, fro
 	todayBegin, todayEnd := getTodayBeginEndTime(&now)
 
 	var unconfirmedHabitLogRecords []*dal.HabitLogRecord
-	if toTime.Unix() >= todayBegin.Unix() && toTime.Unix() < todayEnd.Unix() { // TODay included
+	if toTime.Unix() >= todayBegin.Unix() && toTime.Unix() < todayEnd.Unix() { // today included
 		unconfirmedHabitLogRecords, sErr = dal.UnconfirmedHabitLogRecordDBHD.ListByUIDHabitIDs(db, uid, habitIDs, &todayBegin, &now)
 		if sErr != nil {
 			return nil, 0, sErr
@@ -339,8 +387,15 @@ func (c *HabitCtrl) ListHabitsByUID(uid dal.UID, pagination *dal.Pagination, fro
 	}
 
 	habitIDUHLRMap := make(map[uint64]*dal.HabitLogRecord)
+	habitCooperatorLogStatus := make(map[uint64]map[dal.UID]bool)
 	for _, uhlr := range unconfirmedHabitLogRecords {
 		habitIDUHLRMap[uhlr.HabitID] = uhlr
+		cooperatorLogStatus, ok := habitCooperatorLogStatus[uhlr.HabitID]
+		if !ok {
+			cooperatorLogStatus = make(map[dal.UID]bool)
+		}
+		cooperatorLogStatus[uhlr.UID] = true
+		habitCooperatorLogStatus[uhlr.HabitID] = cooperatorLogStatus
 	}
 
 	// construct return info
@@ -349,12 +404,18 @@ func (c *HabitCtrl) ListHabitsByUID(uid dal.UID, pagination *dal.Pagination, fro
 	startWeekday := now.Weekday()
 	for _, h := range habits {
 		_, ok := habitIDUHLRMap[h.ID]
-		uhc := habitIDUserHabitConfigMap[h.ID]
+		uhc := userHabitConfigMap[h.ID]
+		cooperatorLogStatus, exist := habitCooperatorLogStatus[h.ID]
+		if !exist {
+			cooperatorLogStatus = map[dal.UID]bool{}
+		}
 		detailedHabits = append(detailedHabits, &DetailedHabit{
-			Habit:           h,
-			UserHabitConfig: habitIDUserHabitConfigMap[h.ID],
-			LogRecords:      habitIDHLRMap[h.ID],
-			TodayLogged:     ok,
+			Habit:               h,
+			UserHabitConfig:     userHabitConfigMap[h.ID],
+			Cooperators:         habitCooperatorMap[h.ID],
+			CooperatorLogStatus: cooperatorLogStatus,
+			LogRecords:          habitLogRecordMap[h.ID],
+			TodayLogged:         ok,
 		})
 		// check whether last log time logged
 		if uhc.StreakUpdateAt != nil && uhc.StreakUpdateAt.In(toTime.Location()).Before(todayBegin) {
@@ -479,11 +540,6 @@ func (c *HabitCtrl) LogHabit(uid dal.UID, habitID uint64, logTime *time.Time) (*
 			if sErr != nil {
 				return sErr
 			}
-		} else {
-			sErr = dal.UnconfirmedHabitLogRecordDBHD.Add(tx, newRecord)
-			if sErr != nil {
-				return sErr
-			}
 		}
 		return nil
 	})
@@ -520,7 +576,7 @@ func deleteHabitCommonInfo(tx *gorm.DB, habitID uint64, uid dal.UID) response.SE
 
 // DeleteHabitByID delete a habit, only the owner can delete
 // and all the user inside its group will be removed for their habits list
-func (c *HabitCtrl) DeleteHabitByID(habitID uint64, uid dal.UID) response.SError {
+func (c *HabitCtrl) DeleteHabitByID(uid dal.UID, habitID uint64) response.SError {
 	db := service.GetDBExecutor()
 	habit, sErr := dal.HabitDBHD.GetByID(db, habitID)
 	if sErr != nil {
@@ -538,7 +594,7 @@ func (c *HabitCtrl) DeleteHabitByID(habitID uint64, uid dal.UID) response.SError
 		return response.ErrorCode_UserNoPermission.New("current user has not joined this habit")
 	}
 
-	if habit.Owner == uid {
+	if habit.Owner == uid { // is habit owner
 		var successor *dal.HabitGroup
 		successor, sErr = dal.HabitGroupDBHD.GetByHabitIDAndExcludeUID(db, habitID, uid)
 		if sErr != nil {
@@ -554,7 +610,7 @@ func (c *HabitCtrl) DeleteHabitByID(habitID uint64, uid dal.UID) response.SError
 			})
 		} else {
 			sErr = WithDBTx(db, func(tx *gorm.DB) response.SError {
-				sErr = dal.HabitDBHD.UpdateHabit(tx, habitID, &dal.HabitUpdatableFields{Owner: uid})
+				sErr = dal.HabitDBHD.UpdateHabit(tx, habitID, &dal.HabitUpdatableFields{Owner: successor.UID})
 				if sErr != nil {
 					return sErr
 				}

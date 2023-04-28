@@ -25,16 +25,6 @@ func TestTokenGenerateExtract(t *testing.T) {
 		t.Fatal("uid incorrect")
 	}
 
-	tokenStr, err = GeneratePollToken(uid)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	uid2, err = ExtractPollToken(tokenStr)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	if uid2 != uid {
 		t.Fatal("uid incorrect")
 	}
