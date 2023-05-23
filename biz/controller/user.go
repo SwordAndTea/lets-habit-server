@@ -13,8 +13,6 @@ import (
 	"github.com/swordandtea/lets-habit-server/util"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
-	"io"
-	"mime/multipart"
 	"sync"
 	"text/template"
 	"time"
@@ -355,7 +353,7 @@ const PortraitSizeLimit = 10 * 1024 * 1024 // 10M
 
 type UpdateUserBaseInfoFields struct {
 	Name     string
-	Portrait *multipart.FileHeader
+	Portrait []byte
 }
 
 func (c *UserCtrl) UpdateUserBaseInfo(uid dal.UID, updateFields *UpdateUserBaseInfoFields) (*dal.User, response.SError) {
@@ -375,23 +373,14 @@ func (c *UserCtrl) UpdateUserBaseInfo(uid dal.UID, updateFields *UpdateUserBaseI
 		user.Name = &updateFields.Name
 	}
 
-	var portraitData []byte
-
-	if updateFields.Portrait != nil {
-		if updateFields.Portrait.Size > PortraitSizeLimit {
+	if len(updateFields.Portrait) > 0 {
+		if len(updates.Portrait) > PortraitSizeLimit {
 			return nil, response.ErrorCode_InvalidParam.New("file size beyond limit")
 		}
-		fReader, err := updateFields.Portrait.Open()
-		if err != nil {
-			return nil, response.ErrroCode_InternalUnknownError.Wrap(err, "open portrait file fail")
-		}
-		portraitData, err = io.ReadAll(fReader)
-		if err != nil {
-			return nil, response.ErrroCode_InternalUnknownError.Wrap(err, "read portrait data fail")
-		}
-		imageFormat := util.ParseRawImageFormat(portraitData)
+
+		imageFormat := util.ParseRawImageFormat(updateFields.Portrait)
 		if imageFormat == util.ImgFormatUnknown {
-			return nil, response.ErrorCode_InvalidParam.Wrap(err, "unsupported image format type")
+			return nil, response.ErrorCode_InvalidParam.New("unsupported image format type")
 		}
 		updates.Portrait = fmt.Sprintf("portrait/%s.%s", uid, imageFormat)
 		user.Portrait = &updates.Portrait
@@ -403,9 +392,9 @@ func (c *UserCtrl) UpdateUserBaseInfo(uid dal.UID, updateFields *UpdateUserBaseI
 		if sErr != nil {
 			return sErr
 		}
-		if len(portraitData) > 0 {
+		if len(updateFields.Portrait) > 0 {
 			osExecutor := service.GetObjectStorageExecutor()
-			err := osExecutor.PutObject(ctx, updates.Portrait, bytes.NewReader(portraitData))
+			err := osExecutor.PutObject(ctx, updates.Portrait, bytes.NewReader(updateFields.Portrait))
 			if err != nil {
 				return response.ErrroCode_InternalUnknownError.Wrap(err, "put portrait data fail")
 			}

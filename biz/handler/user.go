@@ -6,7 +6,6 @@ import (
 	"github.com/swordandtea/lets-habit-server/biz/controller"
 	"github.com/swordandtea/lets-habit-server/biz/dal"
 	"github.com/swordandtea/lets-habit-server/biz/response"
-	"mime/multipart"
 )
 
 type UserRouter struct {
@@ -280,15 +279,8 @@ func (r *UserRouter) LoginByEmail(ctx context.Context, rc *app.RequestContext) {
 /*********************** User Router Update User Base Info Handler ***********************/
 
 type UpdateUserBaseInfoRequest struct {
-	Name     string                `form:"name"`
-	Portrait *multipart.FileHeader `form:"portrait"`
-}
-
-func (r *UpdateUserBaseInfoRequest) validate() response.SError {
-	if r.Portrait == nil || r.Portrait.Size == 0 {
-		return response.ErrorCode_InvalidParam.New("portrait file empty")
-	}
-	return nil
+	Name     string `json:"name"`
+	Portrait string `json:"portrait"`
 }
 
 type UpdateUserBaseInfoResponse struct {
@@ -306,7 +298,7 @@ func (r *UserRouter) UpdateUserBaseInfo(ctx context.Context, rc *app.RequestCont
 		return
 	}
 
-	sErr := req.validate()
+	portraitData, sErr := Base64ImgDecode(req.Portrait)
 	if sErr != nil {
 		resp.SetError(sErr)
 		return
@@ -315,7 +307,7 @@ func (r *UserRouter) UpdateUserBaseInfo(ctx context.Context, rc *app.RequestCont
 	uid := rc.GetString(UIDKey)
 	user, sErr := r.Ctrl.UpdateUserBaseInfo(dal.UID(uid), &controller.UpdateUserBaseInfoFields{
 		Name:     req.Name,
-		Portrait: req.Portrait,
+		Portrait: portraitData,
 	})
 	if sErr != nil {
 		resp.SetError(sErr)

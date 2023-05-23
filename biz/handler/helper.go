@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/base64"
 	emailverify "github.com/AfterShip/email-verifier"
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol"
@@ -92,4 +93,15 @@ func ExtractUserToken(token string) (dal.UID, response.SError) {
 		return "", response.ErrorCode_UserAuthFail.Wrap(err, "invalid user token, no user id found")
 	}
 	return dal.UID(claims.ID), nil
+}
+
+func Base64ImgDecode(img string) ([]byte, response.SError) {
+	if img == "" {
+		return nil, nil
+	}
+	imageData, err := base64.StdEncoding.DecodeString(img)
+	if err != nil {
+		return nil, response.ErrorCode_InvalidParam.New("invalid image base64")
+	}
+	return imageData, nil
 }
