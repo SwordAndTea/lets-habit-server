@@ -148,3 +148,11 @@ func (hd *userDBHD) SearchUserByNameOrUID(db *gorm.DB, text string, pagination *
 	postProcessUserField(users)
 	return users, nil
 }
+
+func (hd *userDBHD) DeleteUserByID(db *gorm.DB, uid UID) response.SError {
+	err := db.Where("uid=?", uid).Delete(&User{}).Error
+	if err != nil {
+		return response.ErrroCode_InternalUnknownError.Wrap(err, "delete user fail")
+	}
+	return nil
+}

@@ -435,3 +435,63 @@ func (c *UserCtrl) SearchUserByNameOrUID(text string) ([]*SimplifiedUser, respon
 
 	return simplifiedUsers, nil
 }
+
+func (c *UserCtrl) DeleteAccount(uid dal.UID) response.SError {
+	db := service.GetDBExecutor()
+	habits, _, sErr := dal.HabitDBHD.ListUserJoinedHabits(db, uid, nil)
+	if sErr != nil {
+		return sErr
+	}
+
+	sErr = WithDBTx(db, func(tx *gorm.DB) response.SError {
+		var successor *dal.HabitGroup
+		for _, habit := range habits {
+			if habit.Owner == uid { // is habit owner
+				// try to find a successor
+				successor, sErr = dal.HabitGroupDBHD.GetByHabitIDAndExcludeUID(db, habit.ID, uid)
+				if sErr != nil {
+					return sErr
+				}
+				if successor == nil { // no successor means current use is the last one participate in this habit
+					sErr = dal.HabitDBHD.DeleteByID(db, habit.ID)
+				} else {
+					sErr = dal.HabitDBHD.UpdateHabit(tx, habit.ID, &dal.HabitUpdatableFields{Owner: successor.UID})
+				}
+				if sErr != nil {
+					return sErr
+				}
+			}
+		}
+
+		sErr = dal.HabitGroupDBHD.DeleteByUID(tx, uid)
+		if sErr != nil {
+			return sErr
+		}
+
+		sErr = dal.UserHabitConfigDBHD.DeleteByUID(tx, uid)
+		if sErr != nil {
+			return sErr
+		}
+
+		sErr = dal.HabitLogRecordDBHD.DeleteByUID(tx, uid)
+		if sErr != nil {
+			return sErr
+		}
+
+		sErr = dal.UnconfirmedHabitLogRecordDBHD.DeleteByUID(tx, uid)
+		if sErr != nil {
+			return sErr
+		}
+
+		sErr = dal.UserDBHD.DeleteUserByID(tx, uid)
+		if sErr != nil {
+			return sErr
+		}
+		return nil
+	})
+
+	if sErr != nil {
+		return sErr
+	}
+	return nil
+}

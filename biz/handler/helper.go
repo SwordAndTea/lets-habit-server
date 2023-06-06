@@ -79,6 +79,10 @@ func SetUserTokenCookie(rc *app.RequestContext, uid dal.UID) response.SError {
 	return nil
 }
 
+func ClearUserTokenCookie(rc *app.RequestContext) {
+	rc.SetCookie(UserTokenKey, "", 0, "/", "", protocol.CookieSameSiteLaxMode, false, true)
+}
+
 func ExtractUserToken(token string) (dal.UID, response.SError) {
 	claims := &jwt.RegisteredClaims{}
 	_, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {

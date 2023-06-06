@@ -78,3 +78,11 @@ func (hd *unconfirmedHabitLogRecordDBHD) DeleteByHabitID(db *gorm.DB, habitID ui
 	}
 	return nil
 }
+
+func (hd *unconfirmedHabitLogRecordDBHD) DeleteByUID(db *gorm.DB, uid UID) response.SError {
+	err := db.Table(unconfirmedHabitLogRecordTable).Where("uid=?", uid).Delete(&HabitLogRecord{}).Error
+	if err != nil {
+		return response.ErrroCode_InternalUnknownError.Wrap(err, "delete unconfirmed habit log records by uid fail")
+	}
+	return nil
+}

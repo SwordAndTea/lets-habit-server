@@ -80,8 +80,13 @@ func (hd *habitDBHD) ListUserJoinedHabits(db *gorm.DB, uid UID, pagination *Pagi
 		return nil, 0, response.ErrroCode_InternalUnknownError.Wrap(err, "list user joined habits fail")
 	}
 
-	offset := (pagination.Page - 1) * pagination.PageSize
-	err = db.Where("id in (?)", subquery).Offset(int(offset)).Limit(int(pagination.PageSize)).Find(&hs).Error
+	query := db.Where("id in (?)", subquery)
+	if pagination != nil {
+		offset := (pagination.Page - 1) * pagination.PageSize
+		query = query.Offset(int(offset)).Limit(int(pagination.PageSize))
+	}
+
+	err = query.Find(&hs).Error
 	if err != nil {
 		return nil, 0, response.ErrroCode_InternalUnknownError.Wrap(err, "list user joined habits fail")
 	}

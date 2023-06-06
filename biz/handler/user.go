@@ -316,7 +316,7 @@ func (r *UserRouter) UpdateUserBaseInfo(ctx context.Context, rc *app.RequestCont
 	resp.SetSuccessData(&UpdateUserBaseInfoResponse{User: user})
 }
 
-/*********************** User Router Update User Base Info Handler ***********************/
+/*********************** User Router Search User Handler ***********************/
 
 type UserSearchRequest struct {
 	NameOrUID string `json:"name_or_uid"`
@@ -357,4 +357,19 @@ func (r *UserRouter) UserSearch(ctx context.Context, rc *app.RequestContext) {
 	}
 
 	resp.SetSuccessData(&UserSearchResponse{Users: users})
+}
+
+/*********************** User Router Delete Account Handler ***********************/
+
+func (r *UserRouter) DeleteAccount(ctx context.Context, rc *app.RequestContext) {
+	resp := response.NewHTTPResponse(rc)
+	defer resp.ReturnWithLog(ctx, rc)
+
+	uid := rc.GetString(UIDKey)
+	sErr := r.Ctrl.DeleteAccount(dal.UID(uid))
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+	ClearUserTokenCookie(rc)
 }

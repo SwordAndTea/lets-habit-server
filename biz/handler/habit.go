@@ -135,7 +135,7 @@ func (r *ListHabitsRequest) validate() response.SError {
 		return response.ErrorCode_InvalidParam.New("page mast greater than 0")
 	}
 	if r.PageSize == 0 || r.PageSize > 100 {
-		return response.ErrorCode_InvalidParam.New("page size must greater than 0 and less than 100")
+		return response.ErrorCode_InvalidParam.New("page size must greater than 0 and no more than 100")
 	}
 	fromTime, err := time.Parse(time.RFC3339, r.FromTimestamp)
 	if err != nil {

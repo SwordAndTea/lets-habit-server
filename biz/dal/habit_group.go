@@ -101,7 +101,15 @@ func (hd *habitGroupDBHD) DeleteByHabitIDAndUID(db *gorm.DB, habitID uint64, uid
 func (hd *habitGroupDBHD) DeleteByHabitIDAndUIDs(db *gorm.DB, habitID uint64, uids []UID) response.SError {
 	err := db.Where("habit_id=? and uid in (?)", habitID, uids).Delete(&HabitGroup{}).Error
 	if err != nil {
-		return response.ErrroCode_InternalUnknownError.Wrap(err, "delete habit groups fail")
+		return response.ErrroCode_InternalUnknownError.Wrap(err, "delete habit groups by habit id and uids fail")
+	}
+	return nil
+}
+
+func (hd *habitGroupDBHD) DeleteByUID(db *gorm.DB, uid UID) response.SError {
+	err := db.Where("uid=?", uid).Delete(&HabitGroup{}).Error
+	if err != nil {
+		return response.ErrroCode_InternalUnknownError.Wrap(err, "delete habit groups by uid fail")
 	}
 	return nil
 }

@@ -31,6 +31,9 @@ func customizedRegister(r *server.Hertz) {
 		// email bind
 		apiV1.POST("/user/email/bind", handler.UserTokenVerify(), userRouter.SubmitBindEmail)
 		apiV1.GET("/user/email/bind/confirm", userRouter.ConfirmBindEmail)
+
+		// delete
+		apiV1.DELETE("/user", handler.UserTokenVerify(), userRouter.DeleteAccount)
 	}
 
 	// register habit related api

@@ -141,3 +141,11 @@ func (hd *userHabitConfigDBHD) DeleteByHabitIDAndUID(db *gorm.DB, habitID uint64
 	}
 	return nil
 }
+
+func (hd *userHabitConfigDBHD) DeleteByUID(db *gorm.DB, uid UID) response.SError {
+	err := db.Where("uid=?", uid).Delete(&UserHabitConfig{}).Error
+	if err != nil {
+		return response.ErrroCode_InternalUnknownError.Wrap(err, "delete user habit configs by uid fail")
+	}
+	return nil
+}

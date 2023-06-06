@@ -595,6 +595,7 @@ func (c *HabitCtrl) DeleteHabitByID(uid dal.UID, habitID uint64) response.SError
 	}
 
 	if habit.Owner == uid { // is habit owner
+		// try to find a successor
 		var successor *dal.HabitGroup
 		successor, sErr = dal.HabitGroupDBHD.GetByHabitIDAndExcludeUID(db, habitID, uid)
 		if sErr != nil {
