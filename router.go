@@ -32,6 +32,13 @@ func customizedRegister(r *server.Hertz) {
 		apiV1.POST("/user/email/bind", handler.UserTokenVerify(), userRouter.SubmitBindEmail)
 		apiV1.GET("/user/email/bind/confirm", userRouter.ConfirmBindEmail)
 
+		// password reset
+		apiV1.POST("/user/password/reset/send-verify-code", userRouter.SendResetPasswordVerifyCode)
+		apiV1.POST("/user/password/reset", userRouter.ResetPassword)
+
+		// sign out
+		apiV1.POST("/user/sign-out", userRouter.SignOut)
+
 		// delete
 		apiV1.DELETE("/user", handler.UserTokenVerify(), userRouter.DeleteAccount)
 	}

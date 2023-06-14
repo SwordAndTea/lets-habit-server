@@ -118,7 +118,7 @@ func (hd *userDBHD) UpdateUser(db *gorm.DB, uid UID, updateFields *UserUpdatable
 		updates["email_bind"] = *updateFields.EmailBind
 	}
 	if updateFields.Password != nil {
-		updates["passport"] = updateFields.Password
+		updates["password"] = updateFields.Password
 	}
 	if updateFields.Portrait != "" {
 		updates["portrait"] = updateFields.Portrait

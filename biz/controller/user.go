@@ -22,8 +22,10 @@ type UserCtrl struct{}
 
 var onceEmailActivate = &sync.Once{}
 var onceEmailBind = &sync.Once{}
+var onceEmailResetPassword = &sync.Once{}
 var emailActivateTmpl *template.Template
 var emailBindTmpl *template.Template
+var emailResetPasswordTmpl *template.Template
 
 // emailActivateTmplStr the email template used for user registering from email
 const emailActivateTmplStr = `From: {{.From}}
@@ -48,8 +50,22 @@ Content-Type: text/plain; charset=utf-8
 {{.BindLink}}
 如果你没有操作绑定此邮箱，请忽略此邮件
 
-You are current binding email for account, if it's your operation, click the link below to bind:
+You are currently binding email for your account, if it's your operation, click the link below to bind:
 {{.BindLink}}
+otherwise, please ignore this message
+`
+
+const emailResetPasswordTmplStr = `From: {{.From}}
+To: {{.To}}
+Subject: [lets-habits] 密码更新 (password update)
+Content-Type: text/plain; charset=utf-8
+
+你正在为你的账户更新密码，如果这是你的操作请填写下方验证码:
+{{.VerifyCode}}
+如果不是你的操作，请忽略此邮件
+
+You are currently updating password for your account, if it's your operation, fill in the verify code below:
+{{.VerifyCode}}
 otherwise, please ignore this message
 `
 
@@ -74,6 +90,12 @@ type emailBindTmplFiller struct {
 	BindLink string
 }
 
+type emailResetPasswordTmplFiller struct {
+	From       string
+	To         string
+	VerifyCode string
+}
+
 // GetEmailActivateTemplate lazy load email activate template
 func GetEmailActivateTemplate() *template.Template {
 	onceEmailActivate.Do(func() {
@@ -88,6 +110,13 @@ func GetEmailBindTemplate() *template.Template {
 		emailActivateTmpl, _ = template.New("mail-bind-tmpl").Parse(emailBindTmplStr)
 	})
 	return emailBindTmpl
+}
+
+func GetEmailResetPasswordTemplate() *template.Template {
+	onceEmailResetPassword.Do(func() {
+		emailResetPasswordTmpl, _ = template.New("mail-reset-password-tmpl").Parse(emailResetPasswordTmplStr)
+	})
+	return emailResetPasswordTmpl
 }
 
 // sendActivateEmail send email activate email to targe email address
@@ -155,6 +184,26 @@ func (c *UserCtrl) sendEmailBindEmail(toMail string, uid dal.UID) response.SErro
 	err = mailExecutor.SendMail([]string{toMail}, data.Bytes())
 	if err != nil {
 		return response.ErrroCode_InternalUnknownError.Wrap(err, "send email fail")
+	}
+	return nil
+}
+
+func (c *UserCtrl) sendEmailResetPasswordEmail(toMail string, verifyCode string) response.SError {
+	mailExecutor := service.GetMailExecutor()
+
+	data := &bytes.Buffer{}
+	err := GetEmailResetPasswordTemplate().Execute(data, &emailResetPasswordTmplFiller{
+		From:       mailExecutor.Sender(),
+		To:         toMail,
+		VerifyCode: verifyCode,
+	})
+	if err != nil {
+		return response.ErrroCode_InternalUnknownError.Wrap(err, "fill email reset password template fail")
+	}
+
+	err = mailExecutor.SendMail([]string{toMail}, data.Bytes())
+	if err != nil {
+		return response.ErrroCode_InternalUnknownError.Wrap(err, "send reset password email fail")
 	}
 	return nil
 }
@@ -434,6 +483,106 @@ func (c *UserCtrl) SearchUserByNameOrUID(text string) ([]*SimplifiedUser, respon
 	}
 
 	return simplifiedUsers, nil
+}
+
+func (c *UserCtrl) SendResetPasswordEmail(email string) response.SError {
+	db := service.GetDBExecutor()
+
+	user, sErr := dal.UserDBHD.GetByEmail(db, email)
+	if sErr != nil {
+		return sErr
+	}
+	if user == nil {
+		return response.ErrorCode_InvalidParam.New("email not registered")
+	}
+
+	previousVerifyCodeRecord, sErr := dal.UserEmailVerifyCodeDBHD.GetByEmail(db, email)
+	if sErr != nil {
+		return sErr
+	}
+	now := time.Now().UTC()
+	if previousVerifyCodeRecord != nil {
+		if now.Sub(previousVerifyCodeRecord.SendAt) <= time.Minute {
+			return response.ErrorCode_InvalidParam.New("operation too frequently, try later")
+		}
+	}
+
+	verifyCode := util.GenerateVerifyCode(6)
+
+	sErr = WithDBTx(db, func(tx *gorm.DB) response.SError {
+		if previousVerifyCodeRecord != nil {
+			sErr = dal.UserEmailVerifyCodeDBHD.DeleteByEmail(tx, email)
+			if sErr != nil {
+				return sErr
+			}
+		}
+
+		sErr = dal.UserEmailVerifyCodeDBHD.Add(tx, &dal.UserEmailVerifyCode{
+			Email:      email,
+			VerifyCode: verifyCode,
+			SendAt:     now,
+		})
+		if sErr != nil {
+			return sErr
+		}
+
+		sErr = c.sendEmailResetPasswordEmail(email, verifyCode)
+		if sErr != nil {
+			return sErr
+		}
+		return nil
+	})
+	if sErr != nil {
+		return sErr
+	}
+	return nil
+}
+
+func (c *UserCtrl) ResetPassword(email string, verifyCode string, newPassword string) response.SError {
+	db := service.GetDBExecutor()
+	user, sErr := dal.UserDBHD.GetByEmail(db, email)
+	if sErr != nil {
+		return sErr
+	}
+	if user == nil {
+		return response.ErrorCode_InvalidParam.New("email not registered")
+	}
+
+	verifyCodeRecord, sErr := dal.UserEmailVerifyCodeDBHD.GetByEmail(db, email)
+	if sErr != nil {
+		return sErr
+	}
+	if verifyCodeRecord == nil {
+		return response.ErrorCode_InvalidParam.New("this email currently has no available verify code")
+	}
+
+	if time.Now().UTC().Sub(verifyCodeRecord.SendAt) > time.Minute*10 {
+		return response.ErrorCode_InvalidParam.New("verify code expired")
+	}
+
+	if verifyCodeRecord.VerifyCode != verifyCode {
+		return response.ErrorCode_InvalidParam.New("verify code not right")
+	}
+
+	sErr = WithDBTx(db, func(tx *gorm.DB) response.SError {
+		sErr = dal.UserDBHD.UpdateUser(tx, user.UID, &dal.UserUpdatableFields{
+			Password: &dal.Password{
+				Data:   newPassword,
+				Hashed: false,
+			},
+		})
+		if sErr != nil {
+			return sErr
+		}
+
+		return dal.UserEmailVerifyCodeDBHD.DeleteByEmail(tx, email)
+	})
+
+	if sErr != nil {
+		return sErr
+	}
+
+	return nil
 }
 
 func (c *UserCtrl) DeleteAccount(uid dal.UID) response.SError {

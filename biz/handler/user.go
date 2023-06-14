@@ -359,6 +359,92 @@ func (r *UserRouter) UserSearch(ctx context.Context, rc *app.RequestContext) {
 	resp.SetSuccessData(&UserSearchResponse{Users: users})
 }
 
+/*********************** User Router Password Reset Send Verify Code Handler ***********************/
+
+type SendResetPasswordVerifyCodeRequest struct {
+	Email string `json:"email"`
+}
+
+func (r *SendResetPasswordVerifyCodeRequest) validate() response.SError {
+	return ValidateEmail(r.Email)
+}
+
+func (r *UserRouter) SendResetPasswordVerifyCode(ctx context.Context, rc *app.RequestContext) {
+	resp := response.NewHTTPResponse(rc)
+	defer resp.ReturnWithLog(ctx, rc)
+
+	req := &SendResetPasswordVerifyCodeRequest{}
+	err := rc.BindAndValidate(req)
+	if err != nil {
+		resp.SetError(BindAndValidateErr(err))
+		return
+	}
+
+	sErr := req.validate()
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+
+	sErr = r.Ctrl.SendResetPasswordEmail(req.Email)
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+}
+
+/*********************** User Router Reset Password Handler ***********************/
+
+type ResetPasswordRequest struct {
+	Email       string `json:"email"`
+	Code        string `json:"code"`
+	NewPassword string `json:"new_password"`
+}
+
+func (r *ResetPasswordRequest) validate() response.SError {
+	if r.Email == "" {
+		return response.ErrorCode_InvalidParam.New("empty email")
+	}
+	if r.Code == "" {
+		return response.ErrorCode_InvalidParam.New("empty code")
+	}
+	if r.NewPassword == "" {
+		return response.ErrorCode_InvalidParam.New("empty new password")
+	}
+	return nil
+}
+
+func (r *UserRouter) ResetPassword(ctx context.Context, rc *app.RequestContext) {
+	resp := response.NewHTTPResponse(rc)
+	defer resp.ReturnWithLog(ctx, rc)
+
+	req := &ResetPasswordRequest{}
+	err := rc.BindAndValidate(req)
+	if err != nil {
+		resp.SetError(BindAndValidateErr(err))
+		return
+	}
+
+	sErr := req.validate()
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+
+	sErr = r.Ctrl.ResetPassword(req.Email, req.Code, req.NewPassword)
+	if sErr != nil {
+		resp.SetError(sErr)
+		return
+	}
+	ClearUserTokenCookie(rc)
+}
+
+/*********************** User Router Sign Out Handler ***********************/
+
+func (r *UserRouter) SignOut(ctx context.Context, rc *app.RequestContext) {
+	ClearUserTokenCookie(rc)
+}
+
 /*********************** User Router Delete Account Handler ***********************/
 
 func (r *UserRouter) DeleteAccount(ctx context.Context, rc *app.RequestContext) {

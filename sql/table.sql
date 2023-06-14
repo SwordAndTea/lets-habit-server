@@ -62,3 +62,10 @@ CREATE TABLE IF NOT EXISTS `unconfirmed_habit_log_records` (
     index idx_uid(`uid`),
     index idx_log_time(`log_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='user habit temporary log record';
+
+CREATE TABLE IF NOT EXISTS `user_email_verify_codes` (
+    `email` varchar(32) NOT NULL COMMENT 'user email',
+    `verify_code` varchar(8) NOT NULL COMMENT 'six digital verify code',
+    `send_at` datetime NOT NULL COMMENT 'send time',
+    PRIMARY KEY (`email`, `verify_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='six digital verify code sent to user email';
